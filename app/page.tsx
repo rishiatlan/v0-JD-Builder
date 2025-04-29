@@ -1,23 +1,22 @@
-import { Suspense } from "react"
-import { JDAnalyzer } from "@/components/jd-analyzer"
-import { AtlanHeader } from "@/components/atlan-header"
-import { AtlanFooter } from "@/components/atlan-footer"
-
 export default function Home() {
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50">
-      <AtlanHeader />
-      <main className="flex-1 container mx-auto px-4 py-8">
-        <h1 className="text-3xl md:text-4xl font-bold text-center text-atlan-primary mb-8">Job Description Analyzer</h1>
-        <p className="text-center text-slate-600 max-w-3xl mx-auto mb-12">
-          Empower your hiring process with Atlan's smart JD analyzer. Craft world-class, Atlan-standard job descriptions
-          that attract top 10% global talent.
-        </p>
-        <Suspense fallback={<div className="text-center py-10">Loading JD Analyzer...</div>}>
-          <JDAnalyzer />
-        </Suspense>
+    <div className="flex flex-col items-center justify-center min-h-screen py-2">
+      <main className="flex flex-col items-center justify-center flex-1 px-20 text-center">
+        <h1 className="text-6xl font-bold">
+          Welcome to{" "}
+          <a className="text-blue-600" href="https://atlan.com">
+            Atlan
+          </a>
+        </h1>
+
+        <p className="mt-3 text-2xl">JD Builder Test Deployment</p>
+
+        <div className="flex flex-wrap items-center justify-around max-w-4xl mt-6 sm:w-full">
+          <p className="p-6 mt-6 text-left border w-96 rounded-xl">
+            This is a test deployment to fix the build issues.
+          </p>
+        </div>
       </main>
-      <AtlanFooter />
     </div>
   )
 }
