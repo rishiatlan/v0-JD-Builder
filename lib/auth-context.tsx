@@ -3,7 +3,7 @@
 import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { signIn, signUp, signOut, getCurrentUser, updateProfile } from "@/app/actions/auth-actions"
+import { signIn, signOut, getCurrentUser, updateProfile } from "@/app/actions/auth-actions"
 import type { UserSession } from "@/lib/session"
 
 interface AuthState {
@@ -16,7 +16,11 @@ interface AuthState {
 interface AuthContextType {
   authState: AuthState
   signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
-  signUp: (email: string, password: string, metadata?: any) => Promise<{ success: boolean; error?: string }>
+  signUp: (
+    email: string,
+    password: string,
+    metadata?: { full_name?: string },
+  ) => Promise<{ success: boolean; error?: string }>
   signOut: () => Promise<void>
   updateProfile: (profile: any) => Promise<{ success: boolean; error?: string }>
   clearError: () => void
@@ -100,42 +104,65 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
-  const handleSignUp = async (email: string, password: string, metadata?: any) => {
+  const [isLoading, setIsLoading] = useState(false)
+
+  const handleSignUp = async (
+    email: string,
+    password: string,
+    metadata?: { full_name?: string },
+  ): Promise<{ success: boolean; error?: string }> => {
     try {
-      const formData = new FormData()
-      formData.append("email", email)
-      formData.append("password", password)
-      if (metadata?.full_name) {
-        formData.append("full_name", metadata.full_name)
+      setIsLoading(true)
+
+      // Validate inputs
+      if (!email || !password) {
+        return { success: false, error: "Email and password are required" }
       }
 
-      const result = await signUp(null, formData)
+      const response = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password, metadata }),
+      })
 
-      if (result.success) {
-        const user = await getCurrentUser()
+      const data = await response.json()
 
-        setAuthState({
-          user,
-          isLoading: false,
-          isAuthenticated: !!user,
-          error: null,
-        })
-      } else {
-        setAuthState((prev) => ({
-          ...prev,
-          error: result.error || "Sign up failed",
-        }))
+      if (!response.ok) {
+        console.error("Signup API error:", data)
+        return { success: false, error: data.error || "Failed to create account" }
       }
 
-      return result
-    } catch (error) {
+      // Refresh user data after successful signup
+      await refreshUser()
+
+      return { success: true }
+    } catch (error: any) {
       console.error("Sign up error:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to sign up"
+      return { success: false, error: error.message || "An unexpected error occurred" }
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const refreshUser = async () => {
+    try {
+      const user = await getCurrentUser()
       setAuthState((prev) => ({
         ...prev,
-        error: errorMessage,
+        user,
+        isAuthenticated: !!user,
+        isLoading: false,
+        error: null,
       }))
-      return { success: false, error: errorMessage }
+    } catch (error: any) {
+      console.error("Error refreshing user:", error)
+      setAuthState((prev) => ({
+        ...prev,
+        isLoading: false,
+        error: error.message || "Failed to refresh user",
+      }))
     }
   }
 

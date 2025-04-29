@@ -32,10 +32,36 @@ export default function ResetPasswordPage() {
   const { toast } = useToast()
   const router = useRouter()
   const searchParams = useSearchParams()
-  const token = searchParams.get("token")
+  const [token, setToken] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!token) {
+    // Supabase sends the token as a hash parameter (#access_token=...)
+    // We need to check both the searchParams and the hash
+    const urlToken = searchParams.get("token")
+
+    // Check if we have a hash in the URL (Supabase auth redirect)
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash
+      if (hash && hash.includes("access_token=")) {
+        // Extract the token from the hash
+        const hashParams = new URLSearchParams(hash.substring(1))
+        const accessToken = hashParams.get("access_token")
+        if (accessToken) {
+          setToken(accessToken)
+          return
+        }
+      }
+    }
+
+    if (urlToken) {
+      setToken(urlToken)
+    } else {
+      setError("The password reset link is invalid or has expired.")
+    }
+  }, [searchParams])
+
+  useEffect(() => {
+    if (!token && !error) {
       setError("The password reset link is invalid or has expired.")
       toast({
         title: "Invalid reset link",
@@ -43,7 +69,7 @@ export default function ResetPasswordPage() {
         variant: "destructive",
       })
     }
-  }, [token, toast])
+  }, [token, toast, error])
 
   useEffect(() => {
     // Check password requirements

@@ -1,6 +1,17 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
+// Add the auth callback route to the publicRoutes array
+const publicRoutes = [
+  "/",
+  "/login",
+  "/signup",
+  "/forgot-password",
+  "/reset-password",
+  "/api/auth/callback",
+  // ... any other existing public routes
+]
+
 export function middleware(request: NextRequest) {
   // Check if the request is for the admin route
   if (request.nextUrl.pathname.startsWith("/admin")) {

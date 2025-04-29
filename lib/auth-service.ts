@@ -12,8 +12,13 @@ export class AuthService {
     email: string,
     password: string,
     metadata?: { full_name?: string },
-  ): Promise<{ success: boolean; error?: string }> {
+  ): Promise<{ success: boolean; error?: string; user?: any }> {
     try {
+      // Validate inputs
+      if (!email || !password) {
+        return { success: false, error: "Email and password are required" }
+      }
+
       // Use Supabase auth to sign up
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -26,17 +31,25 @@ export class AuthService {
       })
 
       if (error) {
+        console.error("Supabase auth signup error:", error)
         return { success: false, error: error.message }
       }
 
       // Create a session in our custom session system
       if (data.user) {
-        await createSession({ id: data.user.id, email })
-      }
+        try {
+          await createSession({ id: data.user.id, email })
+        } catch (sessionError: any) {
+          console.error("Session creation error:", sessionError)
+          // Continue even if session creation fails
+        }
 
-      return { success: true }
-    } catch (error) {
-      console.error("Sign up error:", error)
+        return { success: true, user: data.user }
+      } else {
+        return { success: false, error: "User account could not be created" }
+      }
+    } catch (error: any) {
+      console.error("Auth service signup error:", error)
       return { success: false, error: error.message || "Failed to sign up" }
     }
   }

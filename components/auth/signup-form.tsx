@@ -45,6 +45,7 @@ export function SignupForm() {
         })
         router.push("/")
       } else {
+        console.error("Signup error details:", error)
         toast({
           title: "Error",
           description: error || "Failed to create account",
@@ -52,9 +53,10 @@ export function SignupForm() {
         })
       }
     } catch (error) {
+      console.error("Unexpected signup error:", error)
       toast({
         title: "Error",
-        description: "An unexpected error occurred",
+        description: "An unexpected error occurred during signup",
         variant: "destructive",
       })
     } finally {

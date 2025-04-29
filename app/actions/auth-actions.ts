@@ -44,40 +44,55 @@ export async function signUp(formData: FormData) {
   const password = formData.get("password") as string
   const fullName = formData.get("fullName") as string
 
-  const cookieStore = cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-        set(name: string, value: string, options: any) {
-          cookieStore.set({ name, value, ...options })
-        },
-        remove(name: string, options: any) {
-          cookieStore.set({ name, value: "", ...options })
-        },
-      },
-    },
-  )
-
-  const { error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      data: {
-        full_name: fullName,
-      },
-    },
-  })
-
-  if (error) {
-    return { success: false, error: error.message }
+  if (!email || !password) {
+    return { success: false, error: "Email and password are required" }
   }
 
-  return { success: true }
+  try {
+    const cookieStore = cookies()
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return cookieStore.get(name)?.value
+          },
+          set(name: string, value: string, options: any) {
+            cookieStore.set({ name, value, ...options })
+          },
+          remove(name: string, options: any) {
+            cookieStore.set({ name, value: "", ...options })
+          },
+        },
+      },
+    )
+
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: {
+          full_name: fullName,
+        },
+      },
+    })
+
+    if (error) {
+      console.error("Supabase signup error:", error)
+      return { success: false, error: error.message }
+    }
+
+    // Check if user was created successfully
+    if (!data.user) {
+      return { success: false, error: "Failed to create user account" }
+    }
+
+    return { success: true }
+  } catch (error: any) {
+    console.error("Server signup error:", error)
+    return { success: false, error: error.message || "An unexpected error occurred" }
+  }
 }
 
 export async function signOut() {
@@ -124,8 +139,11 @@ export async function resetPassword(email: string) {
     },
   )
 
+  // Make sure we have the correct app URL with the proper path
+  const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/reset-password`
+
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/reset-password`,
+    redirectTo: resetUrl,
   })
 
   if (error) {

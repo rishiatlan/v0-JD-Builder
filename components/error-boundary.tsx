@@ -1,70 +1,79 @@
 "use client"
 
-import type React from "react"
+import React from "react"
 
-import { useEffect, useState } from "react"
+import { useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { AlertCircle } from "lucide-react"
 
 interface ErrorBoundaryProps {
   children: React.ReactNode
 }
 
-export function ErrorBoundary({ children }: ErrorBoundaryProps) {
-  const [hasError, setHasError] = useState(false)
-  const [error, setError] = useState<Error | null>(null)
+interface ErrorBoundaryState {
+  hasError: boolean
+  error?: Error
+}
 
-  useEffect(() => {
-    const handleError = (event: ErrorEvent) => {
-      console.error("Error caught by error boundary:", event.error)
-      setError(event.error)
-      setHasError(true)
-      // Prevent the error from propagating
-      event.preventDefault()
+export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error }
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
+    console.error("Error caught by boundary:", error, errorInfo)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-slate-50">
+          <div className="max-w-md w-full bg-white p-6 rounded-lg shadow-md">
+            <h2 className="text-2xl font-bold text-red-600 mb-4">Something went wrong</h2>
+            <p className="text-gray-700 mb-4">
+              We apologize for the inconvenience. An error occurred while processing your request.
+            </p>
+            {this.state.error && (
+              <div className="bg-red-50 p-3 rounded mb-4 text-sm text-red-800 font-mono overflow-auto max-h-32">
+                {this.state.error.toString()}
+              </div>
+            )}
+            <div className="flex gap-4">
+              <Button onClick={() => (window.location.href = "/")} variant="outline">
+                Go to Home
+              </Button>
+              <Button onClick={() => window.location.reload()} variant="default">
+                Try Again
+              </Button>
+            </div>
+          </div>
+        </div>
+      )
     }
 
-    window.addEventListener("error", handleError)
+    return this.props.children
+  }
+}
+
+export function ErrorBoundaryWrapper({ children }: { children: React.ReactNode }) {
+  useEffect(() => {
+    window.addEventListener("error", (event) => {
+      console.error("Global error caught:", event.error)
+    })
+
+    window.addEventListener("unhandledrejection", (event) => {
+      console.error("Unhandled promise rejection:", event.reason)
+    })
 
     return () => {
-      window.removeEventListener("error", handleError)
+      window.removeEventListener("error", () => {})
+      window.removeEventListener("unhandledrejection", () => {})
     }
   }, [])
 
-  if (hasError) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
-        <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
-          <div className="flex items-center text-red-600 mb-4">
-            <AlertCircle className="h-6 w-6 mr-2" />
-            <h2 className="text-xl font-semibold">Something went wrong</h2>
-          </div>
-
-          <p className="text-slate-600 mb-4">
-            We encountered an error while loading the application. This might be due to a configuration issue.
-          </p>
-
-          {error && (
-            <div className="bg-red-50 p-3 rounded-md mb-4 text-sm text-red-800 overflow-auto max-h-32">
-              {error.message}
-            </div>
-          )}
-
-          <div className="flex justify-end">
-            <Button
-              onClick={() => {
-                setHasError(false)
-                setError(null)
-                window.location.reload()
-              }}
-              className="bg-atlan-primary hover:bg-atlan-primary-dark"
-            >
-              Reload Application
-            </Button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  return <>{children}</>
+  return <ErrorBoundary>{children}</ErrorBoundary>
 }
