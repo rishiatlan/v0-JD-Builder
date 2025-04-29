@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { JDService } from "@/lib/jd-service"
 import { useAuth } from "@/lib/auth-context"
-import { ErrorTracker } from "@/lib/error-tracking"
 import { useToast } from "@/components/ui/use-toast"
 import { Loader2, FileText, Trash2, ExternalLink, Clock, User } from "lucide-react"
 import Link from "next/link"
@@ -75,7 +74,7 @@ export default function HistoryPage() {
           }
         }
       } catch (error) {
-        ErrorTracker.captureError(error, { action: "loadHistoryData", tab: activeTab })
+        console.error("Error loading history data:", error)
         toast({
           title: "Error",
           description: "Failed to load data. Please try again.",
@@ -107,7 +106,7 @@ export default function HistoryPage() {
         })
       }
     } catch (error) {
-      ErrorTracker.captureError(error, { action: "deleteJD", id })
+      console.error("Error deleting JD:", error)
       toast({
         title: "Error",
         description: "An unexpected error occurred",

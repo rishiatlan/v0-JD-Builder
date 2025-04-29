@@ -1,5 +1,4 @@
 import { supabase } from "@/lib/supabase"
-import { ErrorTracker } from "@/lib/error-tracking"
 
 type EventType =
   | "page_view"
@@ -113,12 +112,6 @@ class AnalyticsService {
       console.log("Analytics events flushed to Supabase", { count: events.length })
     } catch (error) {
       console.error("Error flushing analytics events to Supabase:", error)
-
-      // If there's an error, try to log it
-      ErrorTracker.captureError(error, {
-        action: "flush_analytics",
-        eventCount: events.length,
-      }).catch(console.error)
     }
   }
 

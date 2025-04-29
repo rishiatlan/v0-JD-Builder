@@ -1,5 +1,4 @@
 import { supabase } from "@/lib/supabase"
-import { ErrorTracker } from "@/lib/error-tracking"
 
 export interface JDData {
   id?: string
@@ -59,7 +58,7 @@ export class JDService {
 
       return { success: true, data: result.data?.[0] }
     } catch (error) {
-      ErrorTracker.captureError(error, { action: "saveJD", jdData })
+      console.error("Error saving JD:", error)
       return { success: false, error: error.message || "Failed to save job description" }
     }
   }
@@ -74,7 +73,7 @@ export class JDService {
 
       return { success: true, data }
     } catch (error) {
-      ErrorTracker.captureError(error, { action: "getJD", id })
+      console.error("Error getting JD:", error)
       return { success: false, error: error.message || "Failed to retrieve job description" }
     }
   }
@@ -94,7 +93,7 @@ export class JDService {
 
       return { success: true, data }
     } catch (error) {
-      ErrorTracker.captureError(error, { action: "getAllJDs" })
+      console.error("Error getting all JDs:", error)
       return { success: false, error: error.message || "Failed to retrieve job descriptions" }
     }
   }
@@ -120,7 +119,7 @@ export class JDService {
 
       return { success: true }
     } catch (error) {
-      ErrorTracker.captureError(error, { action: "deleteJD", id })
+      console.error("Error deleting JD:", error)
       return { success: false, error: error.message || "Failed to delete job description" }
     }
   }
@@ -135,7 +134,7 @@ export class JDService {
 
       return { success: true, data }
     } catch (error) {
-      ErrorTracker.captureError(error, { action: "getTemplates" })
+      console.error("Error getting templates:", error)
       return { success: false, error: error.message || "Failed to retrieve templates" }
     }
   }

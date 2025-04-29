@@ -11,7 +11,6 @@ import { checkJDForBias } from "@/app/actions"
 import { useToast } from "@/components/ui/use-toast"
 import { useSearchParams } from "next/navigation"
 import { JDService } from "@/lib/jd-service"
-import { ErrorTracker } from "@/lib/error-tracking"
 import { analytics } from "@/lib/analytics"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
@@ -61,7 +60,7 @@ export function JDAnalyzer() {
         })
       }
     } catch (error) {
-      ErrorTracker.captureError(error, { action: "loadTemplate", templateId })
+      console.error("Error loading template:", error)
       toast({
         title: "Error",
         description: "Failed to load template. Please try again.",
@@ -126,7 +125,7 @@ export function JDAnalyzer() {
         })
       }
     } catch (error) {
-      ErrorTracker.captureError(error, { action: "refinementComplete" })
+      console.error("Error during refinement completion:", error)
       toast({
         title: "Error",
         description: "An error occurred during final processing. You can still proceed with the JD.",
@@ -197,7 +196,7 @@ export function JDAnalyzer() {
         })
       }
     } catch (error) {
-      ErrorTracker.captureError(error, { action: "saveJD" }, userEmail)
+      console.error("Error saving JD:", error, userEmail)
       toast({
         title: "Error",
         description: "An unexpected error occurred while saving",

@@ -4,7 +4,7 @@ import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
-import { ErrorTracker } from "@/lib/error-tracking"
+// import { ErrorTracker } from "@/lib/error-tracking"
 
 interface AuthState {
   user: any | null
@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           })
         }
       } catch (error) {
-        ErrorTracker.captureError(error, { action: "initAuth" })
+        console.error("Auth initialization error:", error)
         setAuthState({
           user: null,
           profile: null,
@@ -95,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
 
         // Log sign in event
-        ErrorTracker.logEvent("user_signed_in", { userId: session.user.id })
+        console.log("User signed in:", session.user.id)
       } else if (event === "SIGNED_OUT") {
         setAuthState({
           user: null,
@@ -105,7 +105,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
 
         // Log sign out event
-        ErrorTracker.logEvent("user_signed_out", {})
+        console.log("User signed out")
       }
     })
 
@@ -127,7 +127,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return { success: true }
     } catch (error) {
-      ErrorTracker.captureError(error, { action: "signIn", email })
+      console.error("Sign in error:", error)
       return { success: false, error: error.message || "Failed to sign in" }
     }
   }
@@ -162,7 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return { success: true }
     } catch (error) {
-      ErrorTracker.captureError(error, { action: "signUp", email })
+      console.error("Sign up error:", error)
       return { success: false, error: error.message || "Failed to sign up" }
     }
   }
@@ -172,7 +172,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await supabase.auth.signOut()
       router.push("/")
     } catch (error) {
-      ErrorTracker.captureError(error, { action: "signOut" })
+      console.error("Sign out error:", error)
     }
   }
 
@@ -205,7 +205,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       return { success: true }
     } catch (error) {
-      ErrorTracker.captureError(error, { action: "updateProfile" })
+      console.error("Profile update error:", error)
       return { success: false, error: error.message || "Failed to update profile" }
     }
   }
