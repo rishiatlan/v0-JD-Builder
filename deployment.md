@@ -8,6 +8,8 @@ This document provides detailed instructions for deploying the Atlan JD Builder 
 - A Supabase account
 - A Google Cloud account with Gemini API access
 - Git repository access
+- Node.js 18.17.0 or higher
+- pnpm 8.0.0 or higher
 
 ## Environment Variables
 
@@ -18,6 +20,7 @@ GEMINI_API_KEY=your_gemini_api_key_here
 NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
 SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+JWT_SECRET=your_jwt_secret_here
 \`\`\`
 
 ## Deployment Steps
@@ -25,67 +28,61 @@ SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
 1. **Fork or Clone the Repository**
    - Fork the repository to your own GitHub account or clone it directly
 
-2. **Connect to Vercel**
+2. **Install Dependencies Locally**
+   - Run `pnpm install` to install dependencies
+   - Ensure the pnpm-lock.yaml file is committed to your repository
+
+3. **Connect to Vercel**
    - Log in to your Vercel account
    - Click "New Project"
    - Import your GitHub repository
    - Configure the project settings:
      - Framework Preset: Next.js
      - Root Directory: ./
-     - Build Command: npm run build
+     - Build Command: pnpm run build
      - Output Directory: .next
 
-3. **Set Environment Variables**
+4. **Set Environment Variables**
    - In the Vercel project settings, add all required environment variables
 
-4. **Deploy**
+5. **Configure Build Settings**
+   - In the Vercel project settings, go to "Build & Development Settings"
+   - Set the "Install Command" to `pnpm install --frozen-lockfile`
+   - Set the "Build Command" to `pnpm run build`
+
+6. **Deploy**
    - Click "Deploy" to start the deployment process
    - Wait for the build and deployment to complete
 
 ## Troubleshooting Common Issues
 
-### Package Installation Errors
+### pnpm Installation Errors
 
-If you encounter package installation errors like:
-\`\`\`
-ERR_PNPM_FETCH_404  GET https://registry.npmjs.org/https%3A: Not Found - 404
-\`\`\`
+If you encounter pnpm installation errors:
 
-Try these solutions:
+1. **Check Node.js Version**
+   - Ensure you're using Node.js 18.17.0 or higher (as specified in .nvmrc)
+   - Vercel should automatically detect and use this version
 
-1. **Use npm instead of pnpm**
-   - Add a vercel.json file with:
-   \`\`\`json
-   {
-     "installCommand": "npm install"
-   }
-   \`\`\`
-
-2. **Check package.json**
-   - Ensure all dependencies are properly formatted as package names
-   - Remove any URL-based dependencies
-   - Use exact versions instead of ranges (e.g., "1.0.0" instead of "^1.0.0")
+2. **Check pnpm Version**
+   - Vercel uses pnpm 8.x by default
+   - If you need a specific version, you can specify it in the "Install Command" as `npx pnpm@8.x.x install --frozen-lockfile`
 
 3. **Clear Build Cache**
    - In Vercel project settings, go to "Build & Development Settings"
    - Click "Clear Build Cache" and redeploy
 
-4. **Check for Circular Dependencies**
-   - Review your code for circular dependencies that might cause installation issues
+### Package Resolution Issues
 
-### Supabase Edge Function Issues
+If you encounter package resolution issues:
 
-If you encounter issues with Supabase Edge Functions:
+1. **Check pnpm-lock.yaml**
+   - Ensure the pnpm-lock.yaml file is committed to your repository
+   - If necessary, regenerate it locally with `pnpm install`
 
-1. **Check Deno Imports**
-   - Ensure all imports use the correct Deno URL format
-   - Verify that imported modules are available and compatible
-
-2. **Set Environment Variables**
-   - Make sure all required environment variables are set in the Supabase dashboard
-
-3. **Check Permissions**
-   - Verify that the function has the necessary permissions
+2. **Check .npmrc Configuration**
+   - Ensure the .npmrc file has the correct configuration for pnpm
+   - Try adjusting settings like `node-linker` if needed
 
 ## Post-Deployment Verification
 
@@ -96,6 +93,7 @@ After deployment, verify that:
 3. The Gemini API integration functions properly
 4. Document parsing works as expected
 5. Job descriptions can be saved and retrieved
+6. Export functionality works for all formats (TXT, DOCX, PDF)
 
 ## Monitoring and Maintenance
 
