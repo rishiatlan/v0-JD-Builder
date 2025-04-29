@@ -31,6 +31,12 @@ export function AtlanHeader() {
           <Link href="/templates" className="text-slate-600 hover:text-atlan-primary font-medium">
             Templates
           </Link>
+          <Link
+            href="/standards"
+            className="text-gray-700 hover:text-blue-600 px-3 py-2 rounded-md text-sm font-medium"
+          >
+            Standards
+          </Link>
           <a
             href="https://github.com/rishiatlan/v0-JD-Builder"
             target="_blank"
@@ -62,7 +68,7 @@ export function AtlanHeader() {
           )}
           <Button
             className="bg-atlan-primary hover:bg-atlan-primary-dark text-white"
-            onClick={() => (window.location.href = "/new")}
+            onClick={() => (window.location.href = "/jd/new")}
           >
             Create New JD
           </Button>

@@ -49,7 +49,7 @@ const initialState: AppState = {
 }
 
 // Create the provider component
-export function AppProvider({ children }: { children: React.ReactNode }) {
+export function AppContextProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<AppState>(() => {
     // Try to load state from localStorage on initial render
     if (typeof window !== "undefined") {
