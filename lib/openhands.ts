@@ -326,6 +326,13 @@ Follow these Atlan JD Standards when creating job descriptions:
 4. ENGAGEMENT: Create compelling content that connects the role to Atlan's mission.
 5. ATLAN VOICE: Maintain Atlan's voice - mission-driven, ownership-focused, and inspirational.
 
+IMPORTANT GUIDELINES:
+- NEVER use phrases like "X years of experience" or "minimum Y years required"
+- Instead, describe skills using phrases like "proven experience," "track record," or "demonstrated ability"
+- Frame qualifications based on impact and capabilities, not tenure
+- Focus on outcomes and achievements rather than time spent in roles
+- Be open to non-traditional backgrounds and career paths
+
 FORMAT:
 - Position Overview: Engaging paragraph explaining purpose and impact
 - "What will you do?": 7-10 bullet points using action verbs
@@ -348,13 +355,15 @@ Analyze this job description for potentially biased or non-inclusive language. L
 
 4. Ability bias: Terms that assume physical abilities without mentioning accommodations (e.g., "walk", "see", "hear", "stand")
 
-5. Unnecessarily exclusionary requirements: Years of experience that are arbitrary, specific tools/technologies when skills are transferable, or requirements not essential to job success
+5. Years of experience requirements: Any mention of specific years of experience like "5+ years", "minimum of 3 years", "at least X years" - these exclude qualified candidates with non-traditional backgrounds
 
-6. Superlatives and hyperbole: Terms like "ninja", "rockstar", "guru", "world-class", "exceptional" that may discourage qualified candidates who don't identify with such labels
+6. Unnecessarily exclusionary requirements: Specific tools/technologies when skills are transferable, or requirements not essential to job success
 
-7. Idioms or colloquialisms: Expressions that may not translate well across cultures or be understood by non-native speakers
+7. Superlatives and hyperbole: Terms like "ninja", "rockstar", "guru", "world-class", "exceptional" that may discourage qualified candidates who don't identify with such labels
 
-8. Unnecessarily complex language: Jargon or technical terms that aren't explained and may exclude qualified candidates
+8. Idioms or colloquialisms: Expressions that may not translate well across cultures or be understood by non-native speakers
+
+9. Unnecessarily complex language: Jargon or technical terms that aren't explained and may exclude qualified candidates
 
 Don't limit yourself to these examples - identify ANY language that could potentially exclude qualified candidates.
 
@@ -416,6 +425,34 @@ export async function generateAtlanJD(data: any) {
   }
 }
 
+// Add a function to sanitize years of experience phrases after JD generation
+function sanitizeYearsOfExperience(text) {
+  if (!text) return text
+
+  const bannedPatterns = [
+    /(\d+)\+?\s*years? of experience/gi,
+    /at least (\d+)\s*years/gi,
+    /minimum of (\d+)\s*years/gi,
+    /(\d+)\+?\s*years? in/gi,
+    /experience of (\d+)\+?\s*years/gi,
+  ]
+
+  const replacements = ["proven experience", "demonstrated ability", "track record", "solid background", "proficiency"]
+
+  let sanitizedText = text
+
+  for (const pattern of bannedPatterns) {
+    sanitizedText = sanitizedText.replace(pattern, (match) => {
+      // Get a random replacement phrase
+      const replacement = replacements[Math.floor(Math.random() * replacements.length)]
+      console.log(`Replacing "${match}" with "${replacement}"`)
+      return replacement
+    })
+  }
+
+  return sanitizedText
+}
+
 // AI-based JD generation with improved JSON parsing and enhanced prompt
 async function generateAtlanJDWithAI(data: any) {
   // Enhanced prompt template with Atlan JD Standards
@@ -438,6 +475,10 @@ async function generateAtlanJDWithAI(data: any) {
     3. Focus on outcomes and impact rather than just responsibilities
     4. Highlight the strategic importance of the role to Atlan's mission
     5. Use inclusive language that appeals to diverse candidates
+    6. NEVER use "X years of experience" - instead use phrases like:
+       - "Proven ability to design and scale systems"
+       - "Track record of delivering complex projects"
+       - "Demonstrated expertise in problem-solving"
     
     Format as JSON: {"sections":{"overview":"...","responsibilities":["..."],"qualifications":["..."]}, "analysis":{"clarity":85,"inclusivity":78,"seo":92,"attraction":88}}
   `
@@ -462,6 +503,33 @@ async function generateAtlanJDWithAI(data: any) {
     // Use jsonrepair to fix common JSON issues before parsing
     const repairedJson = jsonrepair(jsonStr)
     const parsedData = JSON.parse(repairedJson)
+
+    // Sanitize any years of experience phrases that might have slipped through
+    if (parsedData.sections) {
+      // Sanitize overview
+      if (parsedData.sections.overview) {
+        parsedData.sections.overview = sanitizeYearsOfExperience(parsedData.sections.overview)
+      }
+
+      // Sanitize responsibilities
+      if (Array.isArray(parsedData.sections.responsibilities)) {
+        parsedData.sections.responsibilities = parsedData.sections.responsibilities.map((item) =>
+          sanitizeYearsOfExperience(item),
+        )
+      } else if (parsedData.sections.responsibilities) {
+        parsedData.sections.responsibilities = sanitizeYearsOfExperience(parsedData.sections.responsibilities)
+      }
+
+      // Sanitize qualifications
+      if (Array.isArray(parsedData.sections.qualifications)) {
+        parsedData.sections.qualifications = parsedData.sections.qualifications.map((item) =>
+          sanitizeYearsOfExperience(item),
+        )
+      } else if (parsedData.sections.qualifications) {
+        parsedData.sections.qualifications = sanitizeYearsOfExperience(parsedData.sections.qualifications)
+      }
+    }
+
     console.log("Successfully parsed JD data:", Object.keys(parsedData))
     return parsedData
   } catch (parseError) {
@@ -656,6 +724,36 @@ async function checkForBiasWithAI(content: string) {
   const contentChunks = chunkText(content, 3000, 100)
   let allBiasFlags: any[] = []
 
+  // First, do a quick check for years of experience patterns
+  const yearsPatterns = [
+    /\d+\+?\s*years? of experience/gi,
+    /at least \d+\s*years/gi,
+    /minimum of \d+\s*years/gi,
+    /\d+\+?\s*years? in/gi,
+    /experience of \d+\+?\s*years/gi,
+  ]
+
+  for (const pattern of yearsPatterns) {
+    const matches = content.match(pattern)
+    if (matches) {
+      for (const match of matches) {
+        // Extract the context around the match
+        const index = content.indexOf(match)
+        const start = Math.max(0, index - 30)
+        const end = Math.min(content.length, index + match.length + 30)
+        const context = content.substring(start, end)
+
+        allBiasFlags.push({
+          term: match,
+          context: context,
+          suggestion: "Replace with 'proven ability' or 'demonstrated expertise'",
+          reason: "Years-based criteria may exclude qualified candidates with non-traditional backgrounds",
+        })
+      }
+    }
+  }
+
+  // Continue with the regular LLM-based bias check
   for (let i = 0; i < contentChunks.length; i++) {
     const chunk = contentChunks[i]
 

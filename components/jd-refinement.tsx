@@ -11,6 +11,8 @@ import { CheckCircle, RefreshCw, Loader2, AlertTriangle, Info } from "lucide-rea
 import { getSectionRefinements } from "@/app/actions"
 import { useToast } from "@/components/ui/use-toast"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+// Add import for the InclusiveLanguageExamples component
+import { InclusiveLanguageExamples } from "@/components/inclusive-language-examples"
 
 // Add this at the top of the file if it doesn't exist
 function useDebounce<T>(value: T, delay: number): T {
@@ -69,14 +71,25 @@ export function JDRefinement({
   }
 
   // Add this near the top of the component, after the useState declarations
-  const debouncedSectionContent = useDebounce(
+  const [debouncedSectionContent, setDebouncedSectionContent] = useState(
     typeof sections[activeTab] === "string"
       ? sections[activeTab]
       : Array.isArray(sections[activeTab])
         ? sections[activeTab].join("\n")
         : "",
-    1000,
   )
+
+  const lastContentRef = useRef("")
+
+  useEffect(() => {
+    setDebouncedSectionContent(
+      typeof sections[activeTab] === "string"
+        ? sections[activeTab]
+        : Array.isArray(sections[activeTab])
+          ? sections[activeTab].join("\n")
+          : "",
+    )
+  }, [sections, activeTab])
 
   const handleSectionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -205,7 +218,6 @@ export function JDRefinement({
     const currentContent = debouncedSectionContent
 
     // Store the last content we fetched suggestions for
-    const lastContentRef = useRef("")
 
     if (
       existingSuggestions.length === 0 ||
@@ -215,6 +227,15 @@ export function JDRefinement({
       fetchSuggestions()
     }
   }, [debouncedSectionContent])
+
+  // Add this near the end of the component, before the final return statement
+  const renderInclusiveLanguageExamples = () => {
+    return (
+      <div className="mt-6">
+        <InclusiveLanguageExamples />
+      </div>
+    )
+  }
 
   return (
     <Card>
@@ -567,6 +588,8 @@ export function JDRefinement({
             </div>
           </TabsContent>
         </Tabs>
+
+        {renderInclusiveLanguageExamples()}
 
         <div className="mt-6 flex justify-end">
           <Button

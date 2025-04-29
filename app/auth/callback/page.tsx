@@ -25,6 +25,17 @@ export default function AuthCallbackPage() {
             throw exchangeError
           }
 
+          // Get the session to confirm it's set
+          const {
+            data: { session },
+          } = await supabase.auth.getSession()
+
+          if (!session) {
+            throw new Error("Failed to establish session after authentication")
+          }
+
+          console.log("Authentication successful, session established")
+
           // Redirect to home page after successful authentication
           router.push("/")
         } else {

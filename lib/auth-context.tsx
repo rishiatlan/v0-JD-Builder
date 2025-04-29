@@ -2,14 +2,13 @@
 
 import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { sendMagicLink, signOut, getCurrentUser, updateProfile } from "@/app/actions/auth-actions"
-import type { UserSession } from "@/lib/session"
+import { useRouter, usePathname } from "next/navigation"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 
 interface AuthState {
-  user: UserSession | null
-  isLoading: boolean
   isAuthenticated: boolean
+  isLoading: boolean
+  user: any | null
   error: string | null
 }
 
@@ -17,7 +16,6 @@ interface AuthContextType {
   authState: AuthState
   sendMagicLink: (email: string) => Promise<{ success: boolean; error?: string }>
   signOut: () => Promise<void>
-  updateProfile: (profile: any) => Promise<{ success: boolean; error?: string }>
   clearError: () => void
 }
 
@@ -25,39 +23,98 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [authState, setAuthState] = useState<AuthState>({
-    user: null,
-    isLoading: true,
     isAuthenticated: false,
+    isLoading: true,
+    user: null,
     error: null,
   })
 
   const router = useRouter()
+  const pathname = usePathname()
+  const supabase = createClientComponentClient()
 
   // Initialize auth state
   useEffect(() => {
     const initAuth = async () => {
       try {
-        const user = await getCurrentUser()
+        // Check for Supabase session
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
 
-        setAuthState({
-          user,
-          isLoading: false,
-          isAuthenticated: !!user,
-          error: null,
-        })
+        if (session) {
+          // We have a valid session
+          setAuthState({
+            isAuthenticated: true,
+            isLoading: false,
+            user: session.user,
+            error: null,
+          })
+        } else {
+          // No valid session
+          setAuthState({
+            isAuthenticated: false,
+            isLoading: false,
+            user: null,
+            error: null,
+          })
+
+          // If not on login page and not on auth callback, redirect to login
+          if (pathname !== "/login" && !pathname.startsWith("/auth/callback")) {
+            router.push("/login")
+          }
+        }
       } catch (error) {
         console.error("Auth initialization error:", error)
         setAuthState({
-          user: null,
-          isLoading: false,
           isAuthenticated: false,
+          isLoading: false,
+          user: null,
           error: error instanceof Error ? error.message : "Authentication initialization failed",
         })
       }
     }
 
     initAuth()
-  }, [])
+
+    // Set up Supabase auth state change listener
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth state changed:", event, session ? "session exists" : "no session")
+
+      if (event === "SIGNED_IN" && session) {
+        // User has signed in, update our state
+        setAuthState({
+          isAuthenticated: true,
+          isLoading: false,
+          user: session.user,
+          error: null,
+        })
+
+        // Redirect to home if on login page
+        if (pathname === "/login") {
+          router.push("/")
+        }
+      } else if (event === "SIGNED_OUT") {
+        // User has signed out, update our state
+        setAuthState({
+          isAuthenticated: false,
+          isLoading: false,
+          user: null,
+          error: null,
+        })
+
+        // Redirect to login
+        router.push("/login")
+      }
+    })
+
+    // Clean up subscription on unmount
+    return () => {
+      subscription.unsubscribe()
+    }
+  }, [router, pathname, supabase.auth])
 
   const clearError = () => {
     setAuthState((prev) => ({ ...prev, error: null }))
@@ -65,19 +122,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const handleSendMagicLink = async (email: string) => {
     try {
-      const formData = new FormData()
-      formData.append("email", email)
+      // Configure magic link to expire in 1 hour (3600 seconds)
+      const { data, error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          shouldCreateUser: true,
+          // Magic link expires in 1 hour
+          emailLinkExpirationIn: 3600,
+        },
+      })
 
-      const result = await sendMagicLink(formData)
-
-      if (!result.success) {
+      if (error) {
         setAuthState((prev) => ({
           ...prev,
-          error: result.error || "Failed to send magic link",
+          error: error.message,
         }))
+        return { success: false, error: error.message }
       }
 
-      return result
+      return { success: true }
     } catch (error) {
       console.error("Send magic link error:", error)
       const errorMessage = error instanceof Error ? error.message : "Failed to send magic link"
@@ -91,58 +155,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const handleSignOut = async () => {
     try {
-      await signOut()
+      await supabase.auth.signOut()
 
       setAuthState({
-        user: null,
-        isLoading: false,
         isAuthenticated: false,
+        isLoading: false,
+        user: null,
         error: null,
       })
 
-      router.push("/")
+      router.push("/login")
+      return { success: true }
     } catch (error) {
       console.error("Sign out error:", error)
       setAuthState((prev) => ({
         ...prev,
         error: error instanceof Error ? error.message : "Sign out failed",
       }))
-    }
-  }
-
-  const handleUpdateProfile = async (profile: any) => {
-    try {
-      const formData = new FormData()
-      if (profile.full_name) {
-        formData.append("full_name", profile.full_name)
-      }
-
-      const result = await updateProfile(formData)
-
-      if (result.success) {
-        const user = await getCurrentUser()
-
-        setAuthState((prev) => ({
-          ...prev,
-          user,
-          error: null,
-        }))
-      } else {
-        setAuthState((prev) => ({
-          ...prev,
-          error: result.error || "Profile update failed",
-        }))
-      }
-
-      return result
-    } catch (error) {
-      console.error("Update profile error:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to update profile"
-      setAuthState((prev) => ({
-        ...prev,
-        error: errorMessage,
-      }))
-      return { success: false, error: errorMessage }
+      return { success: false, error: "Failed to sign out" }
     }
   }
 
@@ -150,7 +180,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     authState,
     sendMagicLink: handleSendMagicLink,
     signOut: handleSignOut,
-    updateProfile: handleUpdateProfile,
     clearError,
   }
 

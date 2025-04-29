@@ -7,96 +7,85 @@ import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { AlertCircle, Loader2, CheckCircle2 } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Loader2 } from "lucide-react"
+import { AtlanLogo } from "@/components/atlan-logo"
 
 export function MagicLinkForm() {
   const [email, setEmail] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [emailSent, setEmailSent] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const { sendMagicLink } = useAuth()
+  const [isSuccess, setIsSuccess] = useState(false)
+  const { sendMagicLink, authState, clearError } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setError(null)
     setIsSubmitting(true)
+    clearError()
 
     try {
       // Validate email domain
-      if (!email.trim().endsWith("@atlan.com")) {
-        setError("Only @atlan.com email addresses are allowed")
-        setIsSubmitting(false)
-        return
+      if (!email.endsWith("@atlan.com")) {
+        throw new Error("Please use your @atlan.com email address")
       }
 
-      const result = await sendMagicLink(email.trim())
+      const result = await sendMagicLink(email)
 
       if (result.success) {
-        setEmailSent(true)
-      } else {
-        setError(result.error || "Failed to send magic link. Please try again.")
+        setIsSuccess(true)
       }
-    } catch (err) {
-      console.error("Magic link error:", err)
-      setError("An unexpected error occurred. Please try again.")
+    } catch (error) {
+      console.error("Magic link submission error:", error)
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  if (emailSent) {
-    return (
-      <div className="text-center py-4">
-        <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
-        <h3 className="text-xl font-semibold mb-2">Magic Link Sent!</h3>
-        <p className="text-slate-600 mb-6">
-          We've sent a magic link to <strong>{email}</strong>. Please check your inbox and click the link to sign in.
-        </p>
-        <p className="text-sm text-slate-500">
-          Don't see the email? Check your spam folder or{" "}
-          <button onClick={() => setEmailSent(false)} className="text-atlan-primary hover:underline font-medium">
-            try again
-          </button>
-          .
-        </p>
-      </div>
-    )
-  }
-
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
-        <Input
-          id="email"
-          type="email"
-          placeholder="your.name@atlan.com"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          className="w-full"
-          disabled={isSubmitting}
-        />
-      </div>
+    <div className="space-y-6">
+      {isSuccess ? (
+        <div className="text-center space-y-4">
+          <div className="flex justify-center mb-4">
+            <AtlanLogo className="h-12 w-auto" />
+          </div>
+          <h2 className="text-xl font-semibold">Check your email</h2>
+          <p className="text-slate-600">
+            We've sent a magic link to <strong>{email}</strong>
+          </p>
+          <p className="text-sm text-slate-500">The link will expire in 1 hour. Click the link to sign in.</p>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="email">Email</Label>
+            <Input
+              id="email"
+              type="email"
+              placeholder="your.name@atlan.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="w-full"
+              autoComplete="email"
+            />
+          </div>
 
-      {error && (
-        <Alert variant="destructive" className="text-sm">
-          <AlertCircle className="h-4 w-4 mr-2" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+          {authState.error && <p className="text-sm text-red-600">{authState.error}</p>}
+
+          <Button type="submit" className="w-full" disabled={isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Sending...
+              </>
+            ) : (
+              "Send Magic Link"
+            )}
+          </Button>
+
+          <p className="text-xs text-slate-500 text-center mt-4">
+            A magic link will be sent to your email. The link will expire in 1 hour.
+          </p>
+        </form>
       )}
-
-      <Button type="submit" className="w-full bg-atlan-primary hover:bg-atlan-primary-dark" disabled={isSubmitting}>
-        {isSubmitting ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Sending...
-          </>
-        ) : (
-          "Send Magic Link"
-        )}
-      </Button>
-    </form>
+    </div>
   )
 }
