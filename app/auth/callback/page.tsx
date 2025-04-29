@@ -13,6 +13,7 @@ export default function AuthCallbackPage() {
 
   useEffect(() => {
     async function handleAuth() {
+      // This should be looking for 'code', not 'token'
       const code = searchParams.get("code")
 
       if (code) {
