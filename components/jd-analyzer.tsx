@@ -15,6 +15,7 @@ import { analytics } from "@/lib/analytics"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useAuth } from "@/lib/auth-context"
 
 export function JDAnalyzer() {
   const [activeStep, setActiveStep] = useState<number>(1)
@@ -26,6 +27,7 @@ export function JDAnalyzer() {
   const [userEmail, setUserEmail] = useState<string>("")
   const { toast } = useToast()
   const searchParams = useSearchParams()
+  const { authState } = useAuth()
 
   // Check for template parameter
   useEffect(() => {
@@ -38,9 +40,16 @@ export function JDAnalyzer() {
     }
   }, [searchParams])
 
+  // Set user email if authenticated
+  useEffect(() => {
+    if (authState.isAuthenticated && authState.user?.email) {
+      setUserEmail(authState.user.email)
+    }
+  }, [authState.isAuthenticated, authState.user])
+
   const loadTemplate = async (templateId: string) => {
     try {
-      // Fetch template from Supabase
+      // Fetch template from database
       const { success, data, error } = await JDService.getJD(templateId)
 
       if (success && data) {
@@ -145,8 +154,13 @@ export function JDAnalyzer() {
   const handleSaveJD = async () => {
     if (!jdData) return
 
-    // Show email dialog
-    setShowEmailDialog(true)
+    // If user is authenticated, use their email
+    if (authState.isAuthenticated && authState.user?.email) {
+      saveJDWithEmail(authState.user.email)
+    } else {
+      // Show email dialog for non-authenticated users
+      setShowEmailDialog(true)
+    }
   }
 
   const handleSaveWithEmail = async () => {
@@ -162,6 +176,10 @@ export function JDAnalyzer() {
       return
     }
 
+    saveJDWithEmail(userEmail)
+  }
+
+  const saveJDWithEmail = async (email: string) => {
     setIsSaving(true)
     setShowEmailDialog(false)
 
@@ -170,7 +188,7 @@ export function JDAnalyzer() {
         title: jdData.title,
         department: jdData.department,
         content: jdData,
-        user_email: userEmail,
+        user_email: email,
         is_public: true, // Default to public
       }
 
@@ -186,7 +204,7 @@ export function JDAnalyzer() {
         analytics.track("jd_saved", {
           id: data?.id,
           title: jdData.title,
-          userEmail,
+          userEmail: email,
         })
       } else {
         toast({
@@ -196,7 +214,7 @@ export function JDAnalyzer() {
         })
       }
     } catch (error) {
-      console.error("Error saving JD:", error, userEmail)
+      console.error("Error saving JD:", error)
       toast({
         title: "Error",
         description: "An unexpected error occurred while saving",

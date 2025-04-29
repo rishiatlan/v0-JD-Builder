@@ -58,11 +58,13 @@
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.6",
     "zod": "^3.24.1",
-    "@supabase/supabase-js": "latest",
     "fs": "latest",
     "path": "latest",
     "mammoth": "latest",
-    "pdfjs-dist": "latest"
+    "pdfjs-dist": "latest",
+    "@neondatabase/serverless": "latest",
+    "jsonwebtoken": "latest",
+    "bcryptjs": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

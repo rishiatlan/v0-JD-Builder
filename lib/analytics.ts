@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase"
+import { query } from "@/lib/db"
 
 type EventType =
   | "page_view"
@@ -52,7 +52,7 @@ class AnalyticsService {
   public identify(userId: string, traits?: Record<string, any>): void {
     this.userId = userId
 
-    // Log user identification to Supabase
+    // Log user identification
     this.track("user_identified", { userId, traits })
   }
 
@@ -93,25 +93,31 @@ class AnalyticsService {
     this.eventQueue = []
 
     try {
-      // Get current user if available
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
-
-      // Insert events into Supabase
+      // Insert events into database
       for (const event of events) {
-        await supabase.from("analytics_events").insert({
-          user_id: user?.id || null,
-          event_type: event.event,
-          properties: event.properties || {},
-          session_id: this.sessionId,
-          created_at: new Date(event.timestamp || Date.now()).toISOString(),
-        })
+        const insertQuery = `
+          INSERT INTO analytics_events (
+            user_email, 
+            event_type, 
+            properties, 
+            session_id, 
+            created_at
+          ) 
+          VALUES ($1, $2, $3, $4, $5)
+        `
+
+        await query(insertQuery, [
+          this.userId,
+          event.event,
+          JSON.stringify(event.properties || {}),
+          this.sessionId,
+          new Date(event.timestamp || Date.now()).toISOString(),
+        ])
       }
 
-      console.log("Analytics events flushed to Supabase", { count: events.length })
+      console.log("Analytics events flushed to database", { count: events.length })
     } catch (error) {
-      console.error("Error flushing analytics events to Supabase:", error)
+      console.error("Error flushing analytics events:", error)
     }
   }
 

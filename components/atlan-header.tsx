@@ -3,9 +3,13 @@
 import Image from "next/image"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Github } from "lucide-react"
+import { Github, LogIn, LogOut } from "lucide-react"
+import { useAuth } from "@/lib/auth-context"
+import { signOut } from "@/app/actions/auth-actions"
 
 export function AtlanHeader() {
+  const { authState } = useAuth()
+
   return (
     <header className="w-full bg-white border-b border-slate-200">
       <div className="container mx-auto px-4 py-4 flex justify-between items-center">
@@ -34,12 +38,32 @@ export function AtlanHeader() {
             Repository
           </a>
         </nav>
-        <Button
-          className="bg-atlan-primary hover:bg-atlan-primary-dark text-white"
-          onClick={() => (window.location.href = "/new")}
-        >
-          Create New JD
-        </Button>
+        <div className="flex items-center space-x-2">
+          {authState.isAuthenticated ? (
+            <>
+              <span className="text-sm text-slate-600 hidden md:inline">
+                {authState.user?.full_name || authState.user?.email}
+              </span>
+              <Button variant="outline" size="sm" onClick={() => signOut()} className="flex items-center">
+                <LogOut className="h-4 w-4 mr-1" />
+                <span className="hidden md:inline">Sign Out</span>
+              </Button>
+            </>
+          ) : (
+            <Link href="/login">
+              <Button variant="outline" size="sm" className="flex items-center">
+                <LogIn className="h-4 w-4 mr-1" />
+                <span className="hidden md:inline">Sign In</span>
+              </Button>
+            </Link>
+          )}
+          <Button
+            className="bg-atlan-primary hover:bg-atlan-primary-dark text-white"
+            onClick={() => (window.location.href = "/new")}
+          >
+            Create New JD
+          </Button>
+        </div>
       </div>
     </header>
   )
