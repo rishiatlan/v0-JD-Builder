@@ -7,13 +7,14 @@ import { useAuth } from "@/lib/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2 } from "lucide-react"
+import { Loader2, AlertCircle, ChevronDown, ChevronUp } from "lucide-react"
 import { AtlanLogo } from "@/components/atlan-logo"
 
 export function MagicLinkForm() {
   const [email, setEmail] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isSuccess, setIsSuccess] = useState(false)
+  const [showDebug, setShowDebug] = useState(false)
   const { sendMagicLink, authState, clearError } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -31,8 +32,10 @@ export function MagicLinkForm() {
 
       if (result.success) {
         setIsSuccess(true)
+      } else {
+        throw new Error(result.error || "Failed to send magic link")
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Magic link submission error:", error)
     } finally {
       setIsSubmitting(false)
@@ -51,6 +54,19 @@ export function MagicLinkForm() {
             We've sent a magic link to <strong>{email}</strong>
           </p>
           <p className="text-sm text-slate-500">The link will expire in 1 hour. Click the link to sign in.</p>
+
+          <div className="mt-6">
+            <Button variant="outline" size="sm" onClick={() => setShowDebug(!showDebug)} className="text-xs">
+              {showDebug ? "Hide Debug Info" : "Show Debug Info"}
+              {showDebug ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />}
+            </Button>
+
+            {showDebug && authState.debugInfo && (
+              <div className="mt-2 p-3 bg-gray-100 rounded text-left">
+                <p className="text-xs text-gray-500 font-mono whitespace-pre-wrap">{authState.debugInfo}</p>
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -68,7 +84,12 @@ export function MagicLinkForm() {
             />
           </div>
 
-          {authState.error && <p className="text-sm text-red-600">{authState.error}</p>}
+          {authState.error && (
+            <div className="bg-red-50 p-3 rounded flex items-start">
+              <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 mr-2 flex-shrink-0" />
+              <p className="text-sm text-red-600">{authState.error}</p>
+            </div>
+          )}
 
           <Button type="submit" className="w-full" disabled={isSubmitting}>
             {isSubmitting ? (
@@ -84,6 +105,19 @@ export function MagicLinkForm() {
           <p className="text-xs text-slate-500 text-center mt-4">
             A magic link will be sent to your email. The link will expire in 1 hour.
           </p>
+
+          <div className="mt-6">
+            <Button variant="outline" size="sm" onClick={() => setShowDebug(!showDebug)} className="text-xs">
+              {showDebug ? "Hide Debug Info" : "Show Debug Info"}
+              {showDebug ? <ChevronUp className="ml-2 h-4 w-4" /> : <ChevronDown className="ml-2 h-4 w-4" />}
+            </Button>
+
+            {showDebug && authState.debugInfo && (
+              <div className="mt-2 p-3 bg-gray-100 rounded text-left">
+                <p className="text-xs text-gray-500 font-mono whitespace-pre-wrap">{authState.debugInfo}</p>
+              </div>
+            )}
+          </div>
         </form>
       )}
     </div>

@@ -7,6 +7,7 @@ import { Loader2 } from "lucide-react"
 
 export default function AuthCallbackPage() {
   const [error, setError] = useState<string | null>(null)
+  const [debugInfo, setDebugInfo] = useState<string | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClientComponentClient()
@@ -17,29 +18,40 @@ export default function AuthCallbackPage() {
         // Check for code in query string (from Supabase auth redirect)
         const code = searchParams.get("code")
 
+        // Add debug info
+        setDebugInfo(`Processing code: ${code ? "Code exists" : "No code found"}`)
+
         if (code) {
           // Exchange the code for a session
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+          setDebugInfo(`Exchanging code for session...`)
+          const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
 
           if (exchangeError) {
+            setDebugInfo(`Exchange error: ${exchangeError.message}`)
             throw exchangeError
           }
 
           // Get the session to confirm it's set
+          setDebugInfo(`Getting session...`)
           const {
             data: { session },
           } = await supabase.auth.getSession()
 
           if (!session) {
+            setDebugInfo(`No session found after exchange`)
             throw new Error("Failed to establish session after authentication")
           }
 
+          setDebugInfo(`Authentication successful, session established for user: ${session.user.email}`)
           console.log("Authentication successful, session established")
 
           // Redirect to home page after successful authentication
-          router.push("/")
+          setTimeout(() => {
+            router.push("/")
+          }, 1000) // Short delay to ensure session is properly set
         } else {
           // No code found, redirect to login
+          setDebugInfo(`No code found in URL, redirecting to login`)
           setError("Invalid authentication link. Please try again.")
           setTimeout(() => {
             router.push("/login")
@@ -47,6 +59,7 @@ export default function AuthCallbackPage() {
         }
       } catch (err: any) {
         console.error("Auth callback error:", err)
+        setDebugInfo(`Error: ${err.message || "Unknown error"}`)
         setError(err.message || "Authentication error. Please try again.")
         setTimeout(() => {
           router.push("/login")
@@ -65,6 +78,11 @@ export default function AuthCallbackPage() {
             <h1 className="text-xl font-semibold text-red-600 mb-2">Authentication Error</h1>
             <p className="text-gray-600 mb-4">{error}</p>
             <p className="text-sm text-gray-500">Redirecting you to login...</p>
+            {debugInfo && (
+              <div className="mt-4 p-3 bg-gray-100 rounded text-left">
+                <p className="text-xs text-gray-500 font-mono whitespace-pre-wrap">{debugInfo}</p>
+              </div>
+            )}
           </>
         ) : (
           <>
@@ -73,6 +91,11 @@ export default function AuthCallbackPage() {
             </div>
             <h1 className="text-xl font-semibold mb-2">Signing you in</h1>
             <p className="text-gray-600">Please wait while we complete the authentication process...</p>
+            {debugInfo && (
+              <div className="mt-4 p-3 bg-gray-100 rounded text-left">
+                <p className="text-xs text-gray-500 font-mono whitespace-pre-wrap">{debugInfo}</p>
+              </div>
+            )}
           </>
         )}
       </div>

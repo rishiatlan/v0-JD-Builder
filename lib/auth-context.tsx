@@ -10,6 +10,7 @@ interface AuthState {
   isLoading: boolean
   user: any | null
   error: string | null
+  debugInfo: string | null
 }
 
 interface AuthContextType {
@@ -27,6 +28,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isLoading: true,
     user: null,
     error: null,
+    debugInfo: null,
   })
 
   const router = useRouter()
@@ -37,6 +39,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const initAuth = async () => {
       try {
+        setAuthState((prev) => ({ ...prev, debugInfo: "Checking for session..." }))
+
         // Check for Supabase session
         const {
           data: { session },
@@ -49,7 +53,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             isLoading: false,
             user: session.user,
             error: null,
+            debugInfo: `Session found for user: ${session.user.email}`,
           })
+
+          console.log("User is authenticated:", session.user.email)
         } else {
           // No valid session
           setAuthState({
@@ -57,7 +64,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             isLoading: false,
             user: null,
             error: null,
+            debugInfo: "No session found",
           })
+
+          console.log("No authenticated user")
 
           // If not on login page and not on auth callback, redirect to login
           if (pathname !== "/login" && !pathname.startsWith("/auth/callback")) {
@@ -71,6 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           isLoading: false,
           user: null,
           error: error instanceof Error ? error.message : "Authentication initialization failed",
+          debugInfo: `Error: ${error instanceof Error ? error.message : "Unknown error"}`,
         })
       }
     }
@@ -82,6 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("Auth state changed:", event, session ? "session exists" : "no session")
+      setAuthState((prev) => ({ ...prev, debugInfo: `Auth event: ${event}` }))
 
       if (event === "SIGNED_IN" && session) {
         // User has signed in, update our state
@@ -90,6 +102,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           isLoading: false,
           user: session.user,
           error: null,
+          debugInfo: `Signed in: ${session.user.email}`,
         })
 
         // Redirect to home if on login page
@@ -103,6 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           isLoading: false,
           user: null,
           error: null,
+          debugInfo: "Signed out",
         })
 
         // Redirect to login
@@ -122,6 +136,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const handleSendMagicLink = async (email: string) => {
     try {
+      setAuthState((prev) => ({ ...prev, debugInfo: `Sending magic link to ${email}...` }))
+
       // Configure magic link to expire in 1 hour (3600 seconds)
       const { data, error } = await supabase.auth.signInWithOtp({
         email,
@@ -137,10 +153,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAuthState((prev) => ({
           ...prev,
           error: error.message,
+          debugInfo: `Error sending magic link: ${error.message}`,
         }))
         return { success: false, error: error.message }
       }
 
+      setAuthState((prev) => ({ ...prev, debugInfo: `Magic link sent successfully to ${email}` }))
       return { success: true }
     } catch (error) {
       console.error("Send magic link error:", error)
@@ -148,6 +166,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAuthState((prev) => ({
         ...prev,
         error: errorMessage,
+        debugInfo: `Exception: ${errorMessage}`,
       }))
       return { success: false, error: errorMessage }
     }
@@ -155,6 +174,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const handleSignOut = async () => {
     try {
+      setAuthState((prev) => ({ ...prev, debugInfo: "Signing out..." }))
       await supabase.auth.signOut()
 
       setAuthState({
@@ -162,6 +182,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading: false,
         user: null,
         error: null,
+        debugInfo: "Signed out successfully",
       })
 
       router.push("/login")
@@ -171,6 +192,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setAuthState((prev) => ({
         ...prev,
         error: error instanceof Error ? error.message : "Sign out failed",
+        debugInfo: `Sign out error: ${error instanceof Error ? error.message : "Unknown error"}`,
       }))
       return { success: false, error: "Failed to sign out" }
     }

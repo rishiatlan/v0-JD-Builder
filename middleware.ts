@@ -2,40 +2,41 @@ import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs"
 
-// This function can be marked `async` if using `await` inside
 export async function middleware(request: NextRequest) {
-  // Create a Supabase client configured to use cookies
-  const supabase = createMiddlewareClient({ req: request, res: NextResponse.next() })
+  try {
+    // Create a Supabase client configured to use cookies
+    const res = NextResponse.next()
+    const supabase = createMiddlewareClient({ req: request, res })
 
-  // Refresh session if expired - required for Server Components
-  await supabase.auth.getSession()
-
-  // Get the pathname
-  const { pathname } = request.nextUrl
-
-  // Check if the pathname is excluded from authentication
-  const isAuthPath =
-    pathname === "/login" ||
-    pathname === "/auth/callback" ||
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/api/auth") ||
-    pathname.includes(".")
-
-  // If it's not an auth path, check for authentication
-  if (!isAuthPath) {
+    // Refresh session if expired
     const {
       data: { session },
     } = await supabase.auth.getSession()
 
-    // If no session, redirect to login
-    if (!session) {
+    // Get the pathname
+    const { pathname } = request.nextUrl
+
+    // Check if the pathname is excluded from authentication
+    const isAuthPath =
+      pathname === "/login" ||
+      pathname.startsWith("/auth/callback") ||
+      pathname.startsWith("/_next") ||
+      pathname.startsWith("/api/auth") ||
+      pathname.includes(".")
+
+    // If it's not an auth path, check for authentication
+    if (!isAuthPath && !session) {
       const url = new URL("/login", request.url)
       url.searchParams.set("redirect", pathname)
       return NextResponse.redirect(url)
     }
-  }
 
-  return NextResponse.next()
+    return res
+  } catch (error) {
+    console.error("Middleware error:", error)
+    // In case of error, allow the request to continue
+    return NextResponse.next()
+  }
 }
 
 // See "Matching Paths" below to learn more
