@@ -1,34 +1,10 @@
-import { query } from "@/lib/db"
-import { createSession, destroySession, getSession } from "@/lib/session"
-import { hashString } from "@/lib/browser-crypto"
-
-const SALT_ROUNDS = 10
+import { supabase } from "@/lib/supabase"
+import { createSession, destroySession } from "@/lib/session"
 
 export interface UserProfile {
   id: string
   email: string
   full_name: string | null
-}
-
-// Simple password hashing function for browser compatibility
-async function hashPassword(password: string): Promise<string> {
-  // Generate a random salt
-  const salt = Array.from(crypto.getRandomValues(new Uint8Array(16)))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("")
-
-  // Hash the password with the salt
-  const hashWithSalt = await hashString(password + salt)
-
-  // Return the salt and hash together
-  return `${salt}:${hashWithSalt}`
-}
-
-// Simple password verification function
-async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
-  const [salt, hash] = storedHash.split(":")
-  const calculatedHash = await hashString(password + salt)
-  return calculatedHash === hash
 }
 
 export class AuthService {
@@ -38,32 +14,25 @@ export class AuthService {
     metadata?: { full_name?: string },
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      // Check if user already exists
-      const existingUser = await query<{ id: string }>("SELECT id FROM user_profiles WHERE email = $1", [email])
+      // Use Supabase auth to sign up
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: metadata?.full_name || null,
+          },
+        },
+      })
 
-      if (existingUser.length > 0) {
-        return { success: false, error: "User with this email already exists" }
+      if (error) {
+        return { success: false, error: error.message }
       }
 
-      // Hash password
-      const passwordHash = await hashPassword(password)
-
-      // Create user
-      const insertQuery = `
-        INSERT INTO user_profiles (email, full_name, password_hash, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, email, full_name
-      `
-
-      const now = new Date().toISOString()
-      const result = await query<UserProfile>(insertQuery, [email, metadata?.full_name || null, passwordHash, now, now])
-
-      if (result.length === 0) {
-        return { success: false, error: "Failed to create user" }
+      // Create a session in our custom session system
+      if (data.user) {
+        await createSession({ id: data.user.id, email })
       }
-
-      // Create session
-      await createSession({ id: result[0].id, email })
 
       return { success: true }
     } catch (error) {
@@ -74,27 +43,20 @@ export class AuthService {
 
   static async signIn(email: string, password: string): Promise<{ success: boolean; error?: string }> {
     try {
-      // Get user
-      const users = await query<{ id: string; password_hash: string }>(
-        "SELECT id, password_hash FROM user_profiles WHERE email = $1",
-        [email],
-      )
+      // Use Supabase auth to sign in
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
 
-      if (users.length === 0) {
+      if (error) {
         return { success: false, error: "Invalid email or password" }
       }
 
-      const user = users[0]
-
-      // Verify password
-      const isPasswordValid = await verifyPassword(password, user.password_hash)
-
-      if (!isPasswordValid) {
-        return { success: false, error: "Invalid email or password" }
+      // Create a session in our custom session system
+      if (data.user) {
+        await createSession({ id: data.user.id, email })
       }
-
-      // Create session
-      await createSession({ id: user.id, email })
 
       return { success: true }
     } catch (error) {
@@ -104,11 +66,27 @@ export class AuthService {
   }
 
   static async signOut(): Promise<void> {
+    await supabase.auth.signOut()
     await destroySession()
   }
 
   static async getCurrentUser(): Promise<UserProfile | null> {
-    return await getSession()
+    try {
+      const { data } = await supabase.auth.getUser()
+
+      if (!data.user) {
+        return null
+      }
+
+      return {
+        id: data.user.id,
+        email: data.user.email!,
+        full_name: data.user.user_metadata.full_name || null,
+      }
+    } catch (error) {
+      console.error("Get current user error:", error)
+      return null
+    }
   }
 
   static async updateProfile(
@@ -116,21 +94,14 @@ export class AuthService {
     profile: { full_name?: string },
   ): Promise<{ success: boolean; error?: string }> {
     try {
-      const updateQuery = `
-        UPDATE user_profiles
-        SET full_name = $1, updated_at = $2
-        WHERE id = $3
-        RETURNING id, email, full_name
-      `
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          full_name: profile.full_name || null,
+        },
+      })
 
-      const result = await query<UserProfile>(updateQuery, [
-        profile.full_name || null,
-        new Date().toISOString(),
-        userId,
-      ])
-
-      if (result.length === 0) {
-        return { success: false, error: "User not found" }
+      if (error) {
+        return { success: false, error: error.message }
       }
 
       return { success: true }

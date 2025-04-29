@@ -63,7 +63,8 @@
     "@neondatabase/serverless": "latest",
     "mammoth": "latest",
     "pdfjs-dist": "latest",
-    "docx": "latest"
+    "docx": "latest",
+    "@supabase/supabase-js": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

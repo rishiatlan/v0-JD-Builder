@@ -1,4 +1,4 @@
-import { query } from "@/lib/db"
+import { getSupabaseAdmin, supabase } from "@/lib/supabase"
 
 export interface JDData {
   id?: string
@@ -16,73 +16,57 @@ export class JDService {
     try {
       // Prepare JD data
       const now = new Date().toISOString()
+      const supabaseAdmin = getSupabaseAdmin()
 
       let result
 
       // Update existing JD or create new one
       if (jdData.id) {
-        const updateQuery = `
-          UPDATE job_descriptions 
-          SET 
-            title = $1, 
-            department = $2, 
-            content = $3, 
-            user_email = $4, 
-            is_template = $5, 
-            is_public = $6, 
-            status = $7, 
-            updated_at = $8
-          WHERE id = $9
-          RETURNING *
-        `
+        const { data, error } = await supabaseAdmin
+          .from("job_descriptions")
+          .update({
+            title: jdData.title,
+            department: jdData.department,
+            content: jdData.content,
+            user_email: jdData.user_email || null,
+            is_template: jdData.is_template || false,
+            is_public: jdData.is_public || false,
+            status: jdData.status || "draft",
+            updated_at: now,
+          })
+          .eq("id", jdData.id)
+          .select()
+          .single()
 
-        result = await query(updateQuery, [
-          jdData.title,
-          jdData.department,
-          JSON.stringify(jdData.content),
-          jdData.user_email || null,
-          jdData.is_template || false,
-          jdData.is_public || false,
-          jdData.status || "draft",
-          now,
-          jdData.id,
-        ])
+        if (error) throw error
+        result = data
       } else {
-        const insertQuery = `
-          INSERT INTO job_descriptions (
-            title, 
-            department, 
-            content, 
-            user_email, 
-            is_template, 
-            is_public, 
-            status, 
-            created_at, 
-            updated_at
-          ) 
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-          RETURNING *
-        `
+        const { data, error } = await supabaseAdmin
+          .from("job_descriptions")
+          .insert({
+            title: jdData.title,
+            department: jdData.department,
+            content: jdData.content,
+            user_email: jdData.user_email || null,
+            is_template: jdData.is_template || false,
+            is_public: jdData.is_public || false,
+            status: jdData.status || "draft",
+            created_at: now,
+            updated_at: now,
+          })
+          .select()
+          .single()
 
-        result = await query(insertQuery, [
-          jdData.title,
-          jdData.department,
-          JSON.stringify(jdData.content),
-          jdData.user_email || null,
-          jdData.is_template || false,
-          jdData.is_public || false,
-          jdData.status || "draft",
-          now,
-          now,
-        ])
+        if (error) throw error
+        result = data
       }
 
       // Log the action in user history
-      await this.logUserAction(jdData.user_email, jdData.id ? "update" : "create", "job_description", result[0]?.id, {
+      await this.logUserAction(jdData.user_email, jdData.id ? "update" : "create", "job_description", result?.id, {
         title: jdData.title,
       })
 
-      return { success: true, data: result[0] }
+      return { success: true, data: result }
     } catch (error) {
       console.error("Error saving JD:", error)
       return { success: false, error: error.message || "Failed to save job description" }
@@ -91,18 +75,13 @@ export class JDService {
 
   static async getJD(id: string): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
-      const selectQuery = `
-        SELECT * FROM job_descriptions 
-        WHERE id = $1
-      `
+      const { data, error } = await supabase.from("job_descriptions").select("*").eq("id", id).single()
 
-      const result = await query(selectQuery, [id])
-
-      if (result.length === 0) {
+      if (error) {
         return { success: false, error: "Job description not found" }
       }
 
-      return { success: true, data: result[0] }
+      return { success: true, data }
     } catch (error) {
       console.error("Error getting JD:", error)
       return { success: false, error: error.message || "Failed to retrieve job description" }
@@ -111,16 +90,16 @@ export class JDService {
 
   static async getAllJDs(limit = 30): Promise<{ success: boolean; data?: any[]; error?: string }> {
     try {
-      const selectQuery = `
-        SELECT * FROM job_descriptions 
-        WHERE is_public = true 
-        ORDER BY created_at DESC 
-        LIMIT $1
-      `
+      const { data, error } = await supabase
+        .from("job_descriptions")
+        .select("*")
+        .eq("is_public", true)
+        .order("created_at", { ascending: false })
+        .limit(limit)
 
-      const result = await query(selectQuery, [limit])
+      if (error) throw error
 
-      return { success: true, data: result }
+      return { success: true, data }
     } catch (error) {
       console.error("Error getting all JDs:", error)
       return { success: false, error: error.message || "Failed to retrieve job descriptions" }
@@ -129,15 +108,15 @@ export class JDService {
 
   static async getUserJDs(userEmail: string): Promise<{ success: boolean; data?: any[]; error?: string }> {
     try {
-      const selectQuery = `
-        SELECT * FROM job_descriptions 
-        WHERE user_email = $1 
-        ORDER BY created_at DESC
-      `
+      const { data, error } = await supabase
+        .from("job_descriptions")
+        .select("*")
+        .eq("user_email", userEmail)
+        .order("created_at", { ascending: false })
 
-      const result = await query(selectQuery, [userEmail])
+      if (error) throw error
 
-      return { success: true, data: result }
+      return { success: true, data }
     } catch (error) {
       console.error("Error getting user JDs:", error)
       return { success: false, error: error.message || "Failed to retrieve user job descriptions" }
@@ -147,31 +126,28 @@ export class JDService {
   static async deleteJD(id: string, userEmail?: string): Promise<{ success: boolean; error?: string }> {
     try {
       // Get JD details before deletion for history
-      const selectQuery = `
-        SELECT title, user_email FROM job_descriptions 
-        WHERE id = $1
-      `
+      const { data: jdData, error: getError } = await supabase
+        .from("job_descriptions")
+        .select("title, user_email")
+        .eq("id", id)
+        .single()
 
-      const jdData = await query(selectQuery, [id])
-
-      if (jdData.length === 0) {
+      if (getError) {
         return { success: false, error: "Job description not found" }
       }
 
       // If user email is provided, verify ownership
-      if (userEmail && jdData[0].user_email !== userEmail) {
+      if (userEmail && jdData.user_email !== userEmail) {
         return { success: false, error: "You do not have permission to delete this job description" }
       }
 
-      const deleteQuery = `
-        DELETE FROM job_descriptions 
-        WHERE id = $1
-      `
+      const supabaseAdmin = getSupabaseAdmin()
+      const { error: deleteError } = await supabaseAdmin.from("job_descriptions").delete().eq("id", id)
 
-      await query(deleteQuery, [id])
+      if (deleteError) throw deleteError
 
       // Log the delete action
-      await this.logUserAction(userEmail, "delete", "job_description", id, { title: jdData[0]?.title })
+      await this.logUserAction(userEmail, "delete", "job_description", id, { title: jdData?.title })
 
       return { success: true }
     } catch (error) {
@@ -182,14 +158,11 @@ export class JDService {
 
   static async getTemplates(): Promise<{ success: boolean; data?: any[]; error?: string }> {
     try {
-      const selectQuery = `
-        SELECT * FROM job_descriptions 
-        WHERE is_template = true
-      `
+      const { data, error } = await supabase.from("job_descriptions").select("*").eq("is_template", true)
 
-      const result = await query(selectQuery)
+      if (error) throw error
 
-      return { success: true, data: result }
+      return { success: true, data }
     } catch (error) {
       console.error("Error getting templates:", error)
       return { success: false, error: error.message || "Failed to retrieve templates" }
@@ -198,16 +171,16 @@ export class JDService {
 
   static async getUserHistory(userEmail: string): Promise<{ success: boolean; data?: any[]; error?: string }> {
     try {
-      const selectQuery = `
-        SELECT * FROM user_history 
-        WHERE user_email = $1 
-        ORDER BY created_at DESC 
-        LIMIT 50
-      `
+      const { data, error } = await supabase
+        .from("user_history")
+        .select("*")
+        .eq("user_email", userEmail)
+        .order("created_at", { ascending: false })
+        .limit(50)
 
-      const result = await query(selectQuery, [userEmail])
+      if (error) throw error
 
-      return { success: true, data: result }
+      return { success: true, data }
     } catch (error) {
       console.error("Error getting user history:", error)
       return { success: false, error: error.message || "Failed to retrieve user history" }
@@ -216,17 +189,12 @@ export class JDService {
 
   static async getAllHistory(limit = 50): Promise<{ success: boolean; data?: any[]; error?: string }> {
     try {
-      const selectQuery = `
-        SELECT h.*, p.full_name 
-        FROM user_history h
-        LEFT JOIN user_profiles p ON h.user_email = p.email
-        ORDER BY h.created_at DESC 
-        LIMIT $1
-      `
+      const supabaseAdmin = getSupabaseAdmin()
+      const { data, error } = await supabaseAdmin.rpc("get_history_with_names", { limit_count: limit })
 
-      const result = await query(selectQuery, [limit])
+      if (error) throw error
 
-      return { success: true, data: result }
+      return { success: true, data }
     } catch (error) {
       console.error("Error getting all history:", error)
       return { success: false, error: error.message || "Failed to retrieve history" }
@@ -241,26 +209,17 @@ export class JDService {
     metadata: Record<string, any> | null,
   ): Promise<void> {
     try {
-      const insertQuery = `
-        INSERT INTO user_history (
-          user_email, 
-          action, 
-          resource_type, 
-          resource_id, 
-          metadata, 
-          created_at
-        ) 
-        VALUES ($1, $2, $3, $4, $5, $6)
-      `
-
-      await query(insertQuery, [
-        userEmail || null,
+      const supabaseAdmin = getSupabaseAdmin()
+      const { error } = await supabaseAdmin.from("user_history").insert({
+        user_email: userEmail || null,
         action,
-        resourceType,
-        resourceId,
-        metadata ? JSON.stringify(metadata) : null,
-        new Date().toISOString(),
-      ])
+        resource_type: resourceType,
+        resource_id: resourceId,
+        metadata,
+        created_at: new Date().toISOString(),
+      })
+
+      if (error) throw error
     } catch (error) {
       console.error("Failed to log user action:", error)
       // Don't throw here to prevent disrupting the main operation
