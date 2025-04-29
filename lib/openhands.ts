@@ -15,6 +15,7 @@ export async function generateWithGemini(prompt: string) {
     const url = `${GEMINI_API_URL}?key=${apiKey}`
     console.log("Calling Gemini API with prompt:", prompt.substring(0, 100) + "...")
 
+    // Use native fetch instead of importing https
     const response = await fetch(url, {
       method: "POST",
       headers: {
