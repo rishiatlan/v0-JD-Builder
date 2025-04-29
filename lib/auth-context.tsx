@@ -3,7 +3,7 @@
 import type React from "react"
 import { createContext, useContext, useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { signIn, signOut, getCurrentUser, updateProfile } from "@/app/actions/auth-actions"
+import { sendMagicLink, signOut, getCurrentUser, updateProfile } from "@/app/actions/auth-actions"
 import type { UserSession } from "@/lib/session"
 
 interface AuthState {
@@ -15,12 +15,7 @@ interface AuthState {
 
 interface AuthContextType {
   authState: AuthState
-  signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
-  signUp: (
-    email: string,
-    password: string,
-    metadata?: { full_name?: string },
-  ) => Promise<{ success: boolean; error?: string }>
+  sendMagicLink: (email: string) => Promise<{ success: boolean; error?: string }>
   signOut: () => Promise<void>
   updateProfile: (profile: any) => Promise<{ success: boolean; error?: string }>
   clearError: () => void
@@ -68,101 +63,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAuthState((prev) => ({ ...prev, error: null }))
   }
 
-  const handleSignIn = async (email: string, password: string) => {
+  const handleSendMagicLink = async (email: string) => {
     try {
       const formData = new FormData()
       formData.append("email", email)
-      formData.append("password", password)
 
-      const result = await signIn(null, formData)
+      const result = await sendMagicLink(formData)
 
-      if (result.success) {
-        const user = await getCurrentUser()
-
-        setAuthState({
-          user,
-          isLoading: false,
-          isAuthenticated: !!user,
-          error: null,
-        })
-      } else {
+      if (!result.success) {
         setAuthState((prev) => ({
           ...prev,
-          error: result.error || "Sign in failed",
+          error: result.error || "Failed to send magic link",
         }))
       }
 
       return result
     } catch (error) {
-      console.error("Sign in error:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to sign in"
+      console.error("Send magic link error:", error)
+      const errorMessage = error instanceof Error ? error.message : "Failed to send magic link"
       setAuthState((prev) => ({
         ...prev,
         error: errorMessage,
       }))
       return { success: false, error: errorMessage }
-    }
-  }
-
-  const [isLoading, setIsLoading] = useState(false)
-
-  const handleSignUp = async (
-    email: string,
-    password: string,
-    metadata?: { full_name?: string },
-  ): Promise<{ success: boolean; error?: string }> => {
-    try {
-      setIsLoading(true)
-
-      // Validate inputs
-      if (!email || !password) {
-        return { success: false, error: "Email and password are required" }
-      }
-
-      const response = await fetch("/api/auth/signup", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password, metadata }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        console.error("Signup API error:", data)
-        return { success: false, error: data.error || "Failed to create account" }
-      }
-
-      // Refresh user data after successful signup
-      await refreshUser()
-
-      return { success: true }
-    } catch (error: any) {
-      console.error("Sign up error:", error)
-      return { success: false, error: error.message || "An unexpected error occurred" }
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const refreshUser = async () => {
-    try {
-      const user = await getCurrentUser()
-      setAuthState((prev) => ({
-        ...prev,
-        user,
-        isAuthenticated: !!user,
-        isLoading: false,
-        error: null,
-      }))
-    } catch (error: any) {
-      console.error("Error refreshing user:", error)
-      setAuthState((prev) => ({
-        ...prev,
-        isLoading: false,
-        error: error.message || "Failed to refresh user",
-      }))
     }
   }
 
@@ -194,7 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         formData.append("full_name", profile.full_name)
       }
 
-      const result = await updateProfile(null, formData)
+      const result = await updateProfile(formData)
 
       if (result.success) {
         const user = await getCurrentUser()
@@ -225,8 +148,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const contextValue: AuthContextType = {
     authState,
-    signIn: handleSignIn,
-    signUp: handleSignUp,
+    sendMagicLink: handleSendMagicLink,
     signOut: handleSignOut,
     updateProfile: handleUpdateProfile,
     clearError,

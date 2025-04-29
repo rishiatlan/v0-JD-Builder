@@ -1,100 +1,52 @@
 "use server"
 
-import { getSupabaseAdmin } from "@/lib/supabase"
+import { JDService } from "@/lib/jd-service"
+import { getCurrentUser } from "@/app/actions/auth-actions"
 
-export interface JDData {
-  id?: string
-  title: string
-  department: string
-  content: any
-  user_email?: string
-  is_template?: boolean
-  is_public?: boolean
-  status?: string
-}
-
-export async function saveJobDescription(jdData: JDData) {
+export async function saveJobDescription(formData: FormData) {
   try {
-    // Prepare JD data
-    const now = new Date().toISOString()
-    const supabaseAdmin = getSupabaseAdmin()
+    const user = await getCurrentUser()
 
-    let result
-
-    // Update existing JD or create new one
-    if (jdData.id) {
-      const { data, error } = await supabaseAdmin
-        .from("job_descriptions")
-        .update({
-          title: jdData.title,
-          department: jdData.department,
-          content: jdData.content,
-          user_email: jdData.user_email || null,
-          is_template: jdData.is_template || false,
-          is_public: jdData.is_public || false,
-          status: jdData.status || "draft",
-          updated_at: now,
-        })
-        .eq("id", jdData.id)
-        .select()
-        .single()
-
-      if (error) throw error
-      result = data
-    } else {
-      const { data, error } = await supabaseAdmin
-        .from("job_descriptions")
-        .insert({
-          title: jdData.title,
-          department: jdData.department,
-          content: jdData.content,
-          user_email: jdData.user_email || null,
-          is_template: jdData.is_template || false,
-          is_public: jdData.is_public || false,
-          status: jdData.status || "draft",
-          created_at: now,
-          updated_at: now,
-        })
-        .select()
-        .single()
-
-      if (error) throw error
-      result = data
+    if (!user || !user.email) {
+      return { success: false, error: "You must be logged in to save a job description" }
     }
 
-    // Log the action in user history
-    await logUserAction(jdData.user_email, jdData.id ? "update" : "create", "job_description", result?.id, {
-      title: jdData.title,
-    })
+    const title = formData.get("title") as string
+    const company = formData.get("company") as string
+    const department = formData.get("department") as string
+    const location = formData.get("location") as string
+    const jobType = formData.get("jobType") as string
+    const experienceLevel = formData.get("experienceLevel") as string
+    const description = formData.get("description") as string
+    const requirements = formData.get("requirements") as string
+    const responsibilities = formData.get("responsibilities") as string
+    const benefits = formData.get("benefits") as string
 
-    return { success: true, data: result }
+    const jdData = {
+      title,
+      company,
+      department,
+      location,
+      job_type: jobType,
+      experience_level: experienceLevel,
+      description,
+      requirements,
+      responsibilities,
+      benefits,
+    }
+
+    const result = await JDService.createJD(jdData, user.email)
+
+    if (!result) {
+      return { success: false, error: "Failed to save job description" }
+    }
+
+    // Track user activity
+    await JDService.trackUserActivity(user.email, "create_jd", `Created job description: ${title}`)
+
+    return { success: true, id: result.id }
   } catch (error) {
-    console.error("Error saving JD:", error)
-    throw new Error(error.message || "Failed to save job description")
-  }
-}
-
-async function logUserAction(
-  userEmail: string | undefined | null,
-  action: string,
-  resourceType: string,
-  resourceId: string | null,
-  metadata: Record<string, any> | null,
-): Promise<void> {
-  try {
-    const supabaseAdmin = getSupabaseAdmin()
-    const { error } = await supabaseAdmin.from("user_history").insert({
-      user_email: userEmail || null,
-      action,
-      resource_type: resourceType,
-      resource_id: resourceId,
-      metadata,
-      created_at: new Date().toISOString(),
-    })
-
-    if (error) throw error
-  } catch (error) {
-    console.error("Failed to log user action:", error)
-    // Don't throw here to prevent disrupting the main operation
+    console.error("Save job description error:", error)
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }

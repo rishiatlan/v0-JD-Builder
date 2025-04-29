@@ -22,7 +22,8 @@ export interface JobDescriptionFormProps {
   onSuccess?: (data: any) => void
 }
 
-export default function JobDescriptionForm({ initialData, onSuccess }: JobDescriptionFormProps) {
+// Add named export alongside default export
+export function JobDescriptionForm({ initialData, onSuccess }: JobDescriptionFormProps) {
   const [saving, setSaving] = useState(false)
   const [formData, setFormData] = useState({
     id: initialData?.id || undefined,
@@ -142,3 +143,6 @@ export default function JobDescriptionForm({ initialData, onSuccess }: JobDescri
     </Card>
   )
 }
+
+// Keep the default export as well
+export default JobDescriptionForm

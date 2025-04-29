@@ -1,4 +1,6 @@
-// Direct API implementation for Gemini
+// Direct API implementation for Gemini with key rotation and enhanced prompts
+import { getKeyManager } from "./key-manager"
+
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 // Circuit breaker state
@@ -13,7 +15,7 @@ const circuitState = {
 // Rate limiting state
 const rateLimitState = {
   lastRequestTime: 0,
-  minRequestInterval: 1000, // Minimum 1 second between requests
+  minRequestInterval: 500, // Minimum 0.5 second between requests (adjusted for multiple keys)
 }
 
 // Debounce function
@@ -137,7 +139,7 @@ async function retryWithBackoff<T>(
   throw lastError
 }
 
-// Function to generate content with Gemini with improved error handling
+// Function to generate content with Gemini with improved error handling and key rotation
 export async function generateWithGemini(prompt: string) {
   // Check if circuit is open (API is known to be down)
   if (circuitState.isOpen) {
@@ -162,12 +164,13 @@ export async function generateWithGemini(prompt: string) {
   }
 
   try {
-    // Replace GEMINI_API_KEY with the actual environment variable
-    const apiKey = process.env.GEMINI_API_KEY
+    // Get an API key from the key manager
+    const keyManager = getKeyManager()
+    const apiKey = keyManager.getNextKey()
 
     if (!apiKey) {
-      console.error("GEMINI_API_KEY environment variable is not set")
-      throw new Error("API key not configured")
+      console.error("No API keys available")
+      throw new Error("All API keys are currently unavailable")
     }
 
     // Chunk the prompt if it's too large - now with overlap
@@ -222,12 +225,33 @@ export async function generateWithGemini(prompt: string) {
               topP: 0.95,
               maxOutputTokens: 8192,
             },
+            safetySettings: [
+              {
+                category: "HARM_CATEGORY_HARASSMENT",
+                threshold: "BLOCK_MEDIUM_AND_ABOVE",
+              },
+              {
+                category: "HARM_CATEGORY_HATE_SPEECH",
+                threshold: "BLOCK_MEDIUM_AND_ABOVE",
+              },
+              {
+                category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                threshold: "BLOCK_MEDIUM_AND_ABOVE",
+              },
+              {
+                category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                threshold: "BLOCK_MEDIUM_AND_ABOVE",
+              },
+            ],
           }),
         })
 
         if (!response.ok) {
           const errorText = await response.text()
           console.error(`API request failed with status ${response.status}:`, errorText)
+
+          // Report error to key manager
+          keyManager.reportError(apiKey)
 
           // Create an error object with status for the retry mechanism
           const error = new Error(`API request failed with status ${response.status}: ${errorText}`)
@@ -253,6 +277,9 @@ export async function generateWithGemini(prompt: string) {
 
       // Call API with retry mechanism
       const data = await retryWithBackoff(makeApiCall)
+
+      // Report success to key manager
+      keyManager.reportSuccess(apiKey)
 
       // Reset failure count on success
       circuitState.failureCount = 0
@@ -288,10 +315,63 @@ export async function generateWithGemini(prompt: string) {
 // Debounced version of generateWithGemini for UI interactions
 export const debouncedGenerateWithGemini = debounce(generateWithGemini, 500)
 
+// Enhanced prompts for JD generation with Atlan-specific guidelines
+const ATLAN_JD_SYSTEM_PROMPT = `
+You are an expert job description writer for Atlan, a modern data collaboration workspace.
+Follow these Atlan JD Standards when creating job descriptions:
+
+1. CLARITY: Use clear, specific language that avoids jargon and ambiguity.
+2. INCLUSIVITY: Use gender-neutral and inclusive language throughout.
+3. COMPLETENESS: Include all essential components (overview, responsibilities, qualifications, benefits).
+4. ENGAGEMENT: Create compelling content that connects the role to Atlan's mission.
+5. ATLAN VOICE: Maintain Atlan's voice - mission-driven, ownership-focused, and inspirational.
+
+FORMAT:
+- Position Overview: Engaging paragraph explaining purpose and impact
+- "What will you do?": 7-10 bullet points using action verbs
+- "What makes you a great match for us?": 7-10 bullet points focusing on skills over experience
+- Benefits & Culture: Highlight Atlan's unique benefits and values
+- Diversity Statement: Express Atlan's commitment to diversity and inclusion
+
+Always structure your response as valid JSON for programmatic processing.
+`
+
+// Comprehensive list of potentially problematic terms to avoid in JDs
+const BIAS_DETECTION_PROMPT = `
+Analyze this job description for potentially biased or non-inclusive language. Look for:
+
+1. Gender-coded terms: Not just obvious ones like "he/she" or "guys", but also terms that research shows may subtly discourage certain genders (e.g., "aggressive", "competitive", "dominant" may discourage women; "collaborative", "supportive", "nurturing" may discourage men)
+
+2. Age-biased language: Terms like "young", "energetic", "digital native", "recent graduate", "fresh", or anything implying a specific age group
+
+3. Cultural or educational bias: References to "cultural fit", specific educational institutions, or requirements that may exclude qualified candidates from diverse backgrounds
+
+4. Ability bias: Terms that assume physical abilities without mentioning accommodations (e.g., "walk", "see", "hear", "stand")
+
+5. Unnecessarily exclusionary requirements: Years of experience that are arbitrary, specific tools/technologies when skills are transferable, or requirements not essential to job success
+
+6. Superlatives and hyperbole: Terms like "ninja", "rockstar", "guru", "world-class", "exceptional" that may discourage qualified candidates who don't identify with such labels
+
+7. Idioms or colloquialisms: Expressions that may not translate well across cultures or be understood by non-native speakers
+
+8. Unnecessarily complex language: Jargon or technical terms that aren't explained and may exclude qualified candidates
+
+Don't limit yourself to these examples - identify ANY language that could potentially exclude qualified candidates.
+
+For each issue found, return:
+- The exact problematic term or phrase
+- The surrounding context
+- A specific suggestion for replacement
+- The reason it could be problematic
+
+Return as JSON array: [{"term":"problematic term","context":"surrounding text","suggestion":"better alternative","reason":"explanation"}]
+If no bias detected, return empty array.
+`
+
 // Function to structure a JD according to Atlan standards with separate analysis
 export async function generateAtlanJD(data: any) {
   try {
-    // Step 1: Generate the core JD content
+    // Step 1: Generate the core JD content with enhanced prompt
     const jdContent = await generateAtlanJDWithAI(data)
 
     // Step 2: If successful, perform a separate analysis call
@@ -308,7 +388,7 @@ export async function generateAtlanJD(data: any) {
             : [jdContent.sections.qualifications]),
         ].join("\n\n")
 
-        // Perform analysis in a separate call
+        // Perform analysis in a separate call with enhanced prompt
         const analysis = await analyzeJDContent(allContent)
 
         // Merge the analysis with the JD content
@@ -336,11 +416,13 @@ export async function generateAtlanJD(data: any) {
   }
 }
 
-// AI-based JD generation with improved JSON parsing
+// AI-based JD generation with improved JSON parsing and enhanced prompt
 async function generateAtlanJDWithAI(data: any) {
-  // Simplified prompt template to reduce token usage
+  // Enhanced prompt template with Atlan JD Standards
   const prompt = `
-    Create a detailed job description for ${data.title} at Atlan.
+    ${ATLAN_JD_SYSTEM_PROMPT}
+    
+    Create a detailed job description for ${data.title} at Atlan that will attract top 10% global talent.
     
     About the role:
     - Title: ${data.title}
@@ -350,14 +432,14 @@ async function generateAtlanJDWithAI(data: any) {
     - Strategic advantage: ${data.advantage}
     - Key decisions: ${data.decisions}
     
-    Follow Atlan's framework:
-    1. Position Overview - Detailed paragraph explaining purpose and impact
-    2. "What will you do?" - 7-10 bullet points of responsibilities
-    3. "What makes you a great match for us?" - 7-10 bullet points of qualifications
+    Follow these guidelines:
+    1. Use the Voice of Atlan - strategic clarity, inspirational language, ownership focus, and mission-driven tone
+    2. Avoid corporate clichés, resume buzzwords, and bland statements
+    3. Focus on outcomes and impact rather than just responsibilities
+    4. Highlight the strategic importance of the role to Atlan's mission
+    5. Use inclusive language that appeals to diverse candidates
     
     Format as JSON: {"sections":{"overview":"...","responsibilities":["..."],"qualifications":["..."]}, "analysis":{"clarity":85,"inclusivity":78,"seo":92,"attraction":88}}
-    
-    Ensure content is bias-free, inclusive, and optimized to attract top talent.
   `
 
   console.log("Generating Atlan JD with data:", JSON.stringify(data))
@@ -389,14 +471,26 @@ async function generateAtlanJDWithAI(data: any) {
   }
 }
 
-// New function to analyze JD content separately
+// New function to analyze JD content separately with enhanced prompt
 async function analyzeJDContent(content: string) {
   const prompt = `
-    Analyze this job description content for quality metrics:
+    You are an expert job description analyzer for Atlan.
+    
+    Analyze this job description content for quality metrics according to Atlan JD Standards:
     
     "${content.substring(0, 3000)}${content.length > 3000 ? "..." : ""}"
     
-    Return JSON with these metrics (1-100 scale):
+    Evaluate on these dimensions (1-100 scale):
+    
+    1. CLARITY: How clear, specific, and jargon-free is the language? Does it avoid ambiguity and clearly communicate expectations?
+    
+    2. INCLUSIVITY: How well does it use gender-neutral and inclusive language? Does it avoid terms that might discourage diverse candidates?
+    
+    3. SEO OPTIMIZATION: How well is it optimized for search engines and job boards? Does it use relevant keywords naturally?
+    
+    4. TALENT ATTRACTION: How compelling and engaging is it for top candidates? Does it inspire and connect to Atlan's mission?
+    
+    Return JSON with these metrics:
     {"clarity": 85, "inclusivity": 78, "seo": 92, "attraction": 88}
   `
 
@@ -424,57 +518,7 @@ async function analyzeJDContent(content: string) {
   }
 }
 
-// Template-based fallback JD generation
-// function generateFallbackJD(data: any) {
-//   // Create a template-based JD using the provided data
-//   const overview = `As a ${data.title} in the ${data.department} department at Atlan, you will play a crucial role in ${data.outcomes}. This position requires someone with ${data.mindset}, who can navigate complex decisions related to ${data.decisions} while contributing to ${data.advantage}.`
-
-//   // Generate responsibilities based on the role
-//   const responsibilities = [
-//     `Drive key outcomes including ${data.outcomes}`,
-//     `Demonstrate and embody the mindset of ${data.mindset}`,
-//     `Make strategic decisions regarding ${data.decisions}`,
-//     `Contribute to Atlan's competitive advantage through ${data.advantage}`,
-//     `Collaborate with cross-functional teams to achieve department goals`,
-//     `Continuously improve processes and methodologies within your domain`,
-//   ]
-
-//   // Generate qualifications based on the role
-//   const qualifications = [
-//     `Proven experience in ${data.department} or related field`,
-//     `Strong understanding of ${data.outcomes.split(" ").slice(0, 3).join(" ")}`,
-//     `Demonstrated ability to ${data.mindset.split(" ").slice(0, 3).join(" ")}`,
-//     `Experience making decisions related to ${data.decisions.split(" ").slice(0, 3).join(" ")}`,
-//     `Excellent communication and collaboration skills`,
-//     `Passion for Atlan's mission and values`,
-//   ]
-
-//   return {
-//     sections: {
-//       overview,
-//       responsibilities,
-//       qualifications,
-//     },
-//     analysis: {
-//       clarity: 80,
-//       inclusivity: 85,
-//       seo: 75,
-//       attraction: 80,
-//     },
-//     suggestions: [
-//       {
-//         section: "overview",
-//         original: "This is a template-generated overview.",
-//         suggestion: "Consider adding more specific details about the role's impact.",
-//         reason: "More specificity will attract better candidates.",
-//       },
-//     ],
-//     biasFlags: [],
-//     isTemplateFallback: true, // Flag to indicate this was generated by the template
-//   }
-// }
-
-// Function to get refinement suggestions for a specific section
+// Function to get refinement suggestions for a specific section with enhanced prompt
 export async function getRefinementSuggestions(section: string, content: string) {
   try {
     // Try to use the AI service
@@ -486,16 +530,26 @@ export async function getRefinementSuggestions(section: string, content: string)
   }
 }
 
-// AI-based refinement suggestions with improved parsing
+// AI-based refinement suggestions with improved parsing and enhanced prompt
 async function getRefinementSuggestionsWithAI(section: string, content: string) {
-  // Simplified prompt to reduce token usage
+  // Enhanced prompt with Atlan JD Standards
   const prompt = `
-    Analyze this ${section} section of a job description and provide refinement suggestions:
+    You are an expert job description editor for Atlan.
+    
+    Analyze this ${section} section of a job description according to Atlan JD Standards:
     
     "${content}"
     
-    Provide 2-3 suggestions that enhance clarity, use inspirational language, and focus on ownership.
-    Format as JSON array: [{"original":"...","suggestion":"...","reason":"..."}]
+    Provide 3-4 specific suggestions that:
+    1. Enhance clarity and remove ambiguity
+    2. Use more inclusive and gender-neutral language
+    3. Incorporate Atlan's voice (mission-driven, ownership-focused, inspirational)
+    4. Make the content more compelling for top talent
+    5. Focus on strategic impact and outcomes rather than just tasks
+    
+    Format as JSON array: [{"original":"specific text to replace","suggestion":"improved text","reason":"explanation of improvement"}]
+    
+    Be specific about exactly what text should be replaced, not general advice.
   `
 
   console.log(`Getting refinement suggestions for ${section} section`)
@@ -584,7 +638,7 @@ function generateFallbackRefinements(section: string, content: string) {
   ]
 }
 
-// Function to check for bias in JD content with improved chunking and parsing
+// Function to check for bias in JD content with improved chunking, parsing and enhanced prompt
 export async function checkForBias(content: string) {
   try {
     // Try to use the AI service with improved chunking
@@ -596,7 +650,7 @@ export async function checkForBias(content: string) {
   }
 }
 
-// AI-based bias check with improved chunking and parsing
+// AI-based bias check with improved chunking, parsing and enhanced prompt
 async function checkForBiasWithAI(content: string) {
   // Chunk the content with overlap to maintain context
   const contentChunks = chunkText(content, 3000, 100)
@@ -605,15 +659,8 @@ async function checkForBiasWithAI(content: string) {
   for (let i = 0; i < contentChunks.length; i++) {
     const chunk = contentChunks[i]
 
-    // Simplified prompt to reduce token usage
-    const prompt = `
-      Analyze this job description content for bias or non-inclusive language:
-      
-      "${chunk}"
-      
-      Return JSON array of issues: [{"term":"...","context":"...","suggestion":"...","reason":"..."}]
-      If no bias detected, return empty array.
-    `
+    // Enhanced prompt with comprehensive bias detection
+    const prompt = BIAS_DETECTION_PROMPT + `\n\nAnalyze this text:\n"${chunk}"`
 
     console.log(`Checking for bias in content chunk ${i + 1}/${contentChunks.length}`)
 

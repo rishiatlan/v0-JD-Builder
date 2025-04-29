@@ -1,5 +1,4 @@
 import { supabase } from "@/lib/supabase"
-import { createSession, destroySession } from "@/lib/session"
 
 export interface UserProfile {
   id: string
@@ -8,79 +7,38 @@ export interface UserProfile {
 }
 
 export class AuthService {
-  static async signUp(
-    email: string,
-    password: string,
-    metadata?: { full_name?: string },
-  ): Promise<{ success: boolean; error?: string; user?: any }> {
+  static async sendMagicLink(email: string): Promise<{ success: boolean; error?: string }> {
     try {
-      // Validate inputs
-      if (!email || !password) {
-        return { success: false, error: "Email and password are required" }
+      // Validate email domain
+      if (!email.endsWith("@atlan.com")) {
+        return {
+          success: false,
+          error: "Only @atlan.com email addresses are allowed",
+        }
       }
 
-      // Use Supabase auth to sign up
-      const { data, error } = await supabase.auth.signUp({
+      // Send magic link
+      const { error } = await supabase.auth.signInWithOtp({
         email,
-        password,
         options: {
-          data: {
-            full_name: metadata?.full_name || null,
-          },
+          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
         },
       })
 
       if (error) {
-        console.error("Supabase auth signup error:", error)
+        console.error("Magic link error:", error)
         return { success: false, error: error.message }
       }
 
-      // Create a session in our custom session system
-      if (data.user) {
-        try {
-          await createSession({ id: data.user.id, email })
-        } catch (sessionError: any) {
-          console.error("Session creation error:", sessionError)
-          // Continue even if session creation fails
-        }
-
-        return { success: true, user: data.user }
-      } else {
-        return { success: false, error: "User account could not be created" }
-      }
-    } catch (error: any) {
-      console.error("Auth service signup error:", error)
-      return { success: false, error: error.message || "Failed to sign up" }
-    }
-  }
-
-  static async signIn(email: string, password: string): Promise<{ success: boolean; error?: string }> {
-    try {
-      // Use Supabase auth to sign in
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      })
-
-      if (error) {
-        return { success: false, error: "Invalid email or password" }
-      }
-
-      // Create a session in our custom session system
-      if (data.user) {
-        await createSession({ id: data.user.id, email })
-      }
-
       return { success: true }
-    } catch (error) {
-      console.error("Sign in error:", error)
-      return { success: false, error: error.message || "Failed to sign in" }
+    } catch (error: any) {
+      console.error("Auth service error:", error)
+      return { success: false, error: error.message || "Failed to send magic link" }
     }
   }
 
   static async signOut(): Promise<void> {
     await supabase.auth.signOut()
-    await destroySession()
   }
 
   static async getCurrentUser(): Promise<UserProfile | null> {

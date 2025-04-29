@@ -7,9 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { CheckCircle, RefreshCw, Loader2 } from "lucide-react"
+import { CheckCircle, RefreshCw, Loader2, AlertTriangle, Info } from "lucide-react"
 import { getSectionRefinements } from "@/app/actions"
 import { useToast } from "@/components/ui/use-toast"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 
 // Add this at the top of the file if it doesn't exist
 function useDebounce<T>(value: T, delay: number): T {
@@ -48,7 +49,24 @@ export function JDRefinement({
   const [suggestions, setSuggestions] = useState(data.suggestions || [])
   const [appliedSuggestions, setAppliedSuggestions] = useState<string[]>([])
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
+  const [jdScore, setJdScore] = useState({
+    overview: calculateSectionScore(activeTab),
+    responsibilities: calculateSectionScore("responsibilities"),
+    qualifications: calculateSectionScore("qualifications"),
+  })
   const { toast } = useToast()
+
+  // Calculate a section score based on applied suggestions
+  function calculateSectionScore(section: string) {
+    const sectionSuggestions = suggestions.filter((s: any) => s.section === section)
+    if (sectionSuggestions.length === 0) return 100 // Perfect score if no suggestions
+
+    const appliedCount = sectionSuggestions.filter((s: any) =>
+      appliedSuggestions.includes(`${s.section}-${s.original}`),
+    ).length
+
+    return Math.min(100, Math.round(70 + (appliedCount / sectionSuggestions.length) * 30))
+  }
 
   // Add this near the top of the component, after the useState declarations
   const debouncedSectionContent = useDebounce(
@@ -63,6 +81,12 @@ export function JDRefinement({
   const handleSectionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setSections((prev) => ({ ...prev, [name]: value }))
+
+    // Reset score when content changes significantly
+    setJdScore((prev) => ({
+      ...prev,
+      [name]: 70, // Base score for edited content
+    }))
   }
 
   const handleApplySuggestion = (suggestion: any) => {
@@ -74,6 +98,18 @@ export function JDRefinement({
           : prev[suggestion.section],
     }))
     setAppliedSuggestions((prev) => [...prev, `${suggestion.section}-${suggestion.original}`])
+
+    // Update score when suggestion is applied
+    setJdScore((prev) => ({
+      ...prev,
+      [suggestion.section]: calculateSectionScore(suggestion.section),
+    }))
+
+    toast({
+      title: "Suggestion applied",
+      description: "Your job description has been improved!",
+      variant: "success",
+    })
   }
 
   const handleFinalize = () => {
@@ -90,6 +126,7 @@ export function JDRefinement({
       sections: {
         ...sections,
       },
+      scores: jdScore,
     })
   }
 
@@ -99,6 +136,12 @@ export function JDRefinement({
 
   const isSuggestionApplied = (suggestion: any) => {
     return appliedSuggestions.includes(`${suggestion.section}-${suggestion.original}`)
+  }
+
+  const getScoreColor = (score: number) => {
+    if (score >= 90) return "text-green-500"
+    if (score >= 75) return "text-amber-500"
+    return "text-red-500"
   }
 
   const fetchSuggestions = async () => {
@@ -125,6 +168,12 @@ export function JDRefinement({
 
         // Add new suggestions to existing ones
         setSuggestions((prev) => [...prev.filter((s: any) => s.section !== activeTab), ...formattedSuggestions])
+
+        // Update score based on new suggestions
+        setJdScore((prev) => ({
+          ...prev,
+          [activeTab]: calculateSectionScore(activeTab),
+        }))
 
         toast({
           title: "Suggestions ready",
@@ -156,13 +205,13 @@ export function JDRefinement({
     const currentContent = debouncedSectionContent
 
     // Store the last content we fetched suggestions for
-    const lastContent = useRef("")
+    const lastContentRef = useRef("")
 
     if (
       existingSuggestions.length === 0 ||
-      (currentContent && lastContent.current && Math.abs(currentContent.length - lastContent.current.length) > 50)
+      (currentContent && lastContentRef.current && Math.abs(currentContent.length - lastContentRef.current.length) > 50)
     ) {
-      lastContent.current = currentContent
+      lastContentRef.current = currentContent
       fetchSuggestions()
     }
   }, [debouncedSectionContent])
@@ -170,7 +219,29 @@ export function JDRefinement({
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg text-atlan-primary">Refine Your Job Description</CardTitle>
+        <CardTitle className="text-lg text-atlan-primary flex items-center justify-between">
+          <span>Refine Your Job Description</span>
+          <div className="flex items-center space-x-2">
+            <span className="text-sm font-normal">Overall Quality:</span>
+            <span
+              className={`text-sm font-bold ${getScoreColor(
+                (jdScore.overview + jdScore.responsibilities + jdScore.qualifications) / 3,
+              )}`}
+            >
+              {Math.round((jdScore.overview + jdScore.responsibilities + jdScore.qualifications) / 3)}%
+            </span>
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger>
+                  <Info className="h-4 w-4 text-slate-400" />
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="text-xs">Based on Atlan JD Standards compliance</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab}>
@@ -179,24 +250,50 @@ export function JDRefinement({
               value="overview"
               className="data-[state=active]:bg-atlan-primary data-[state=active]:text-white"
             >
-              Position Overview
+              <div className="flex items-center">
+                <span>Position Overview</span>
+                <span className={`ml-2 text-xs font-bold ${getScoreColor(jdScore.overview)}`}>{jdScore.overview}%</span>
+              </div>
             </TabsTrigger>
             <TabsTrigger
               value="responsibilities"
               className="data-[state=active]:bg-atlan-primary data-[state=active]:text-white"
             >
-              What will you do?
+              <div className="flex items-center">
+                <span>What will you do?</span>
+                <span className={`ml-2 text-xs font-bold ${getScoreColor(jdScore.responsibilities)}`}>
+                  {jdScore.responsibilities}%
+                </span>
+              </div>
             </TabsTrigger>
             <TabsTrigger
               value="qualifications"
               className="data-[state=active]:bg-atlan-primary data-[state=active]:text-white"
             >
-              Great Match
+              <div className="flex items-center">
+                <span>Great Match</span>
+                <span className={`ml-2 text-xs font-bold ${getScoreColor(jdScore.qualifications)}`}>
+                  {jdScore.qualifications}%
+                </span>
+              </div>
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview">
             <div className="space-y-4">
+              <div className="bg-slate-50 p-3 rounded-md border border-slate-200 mb-4">
+                <div className="flex items-start">
+                  <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 mr-2 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium">Position Overview Tips</p>
+                    <p className="text-sm text-slate-600 mt-1">
+                      Start with an engaging overview that captures the essence of the role and why it matters at Atlan.
+                      Connect the position to our mission of helping teams do their best work with data.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <Textarea
                 name="overview"
                 value={sections.overview}
@@ -267,6 +364,19 @@ export function JDRefinement({
 
           <TabsContent value="responsibilities">
             <div className="space-y-4">
+              <div className="bg-slate-50 p-3 rounded-md border border-slate-200 mb-4">
+                <div className="flex items-start">
+                  <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 mr-2 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium">Responsibilities Tips</p>
+                    <p className="text-sm text-slate-600 mt-1">
+                      List 5-8 key responsibilities using action verbs. Focus on outcomes rather than tasks. Be specific
+                      about what the person will own and accomplish.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 {typeof sections.responsibilities === "string" ? (
                   <Textarea
@@ -356,6 +466,20 @@ export function JDRefinement({
 
           <TabsContent value="qualifications">
             <div className="space-y-4">
+              <div className="bg-slate-50 p-3 rounded-md border border-slate-200 mb-4">
+                <div className="flex items-start">
+                  <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 mr-2 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium">Qualifications Tips</p>
+                    <p className="text-sm text-slate-600 mt-1">
+                      Distinguish between "must-have" and "nice-to-have" qualifications. Focus on skills and
+                      competencies rather than years of experience. Include both technical and soft skills relevant to
+                      the role.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 {typeof sections.qualifications === "string" ? (
                   <Textarea

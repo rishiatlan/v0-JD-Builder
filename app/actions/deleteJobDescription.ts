@@ -1,62 +1,40 @@
 "use server"
 
-import { getSupabaseAdmin } from "@/lib/supabase"
+import { JDService } from "@/lib/jd-service"
+import { getCurrentUser } from "@/app/actions/auth-actions"
 
-export async function deleteJobDescription(id: string, userEmail?: string) {
+export async function deleteJobDescription(id: string) {
   try {
-    const supabaseAdmin = getSupabaseAdmin()
+    const user = await getCurrentUser()
 
-    // Get JD details before deletion for history
-    const { data: jdData, error: getError } = await supabaseAdmin
-      .from("job_descriptions")
-      .select("title, user_email")
-      .eq("id", id)
-      .single()
-
-    if (getError) {
-      throw new Error("Job description not found")
+    if (!user || !user.email) {
+      return { success: false, error: "You must be logged in to delete a job description" }
     }
 
-    // If user email is provided, verify ownership
-    if (userEmail && jdData.user_email !== userEmail) {
-      throw new Error("You do not have permission to delete this job description")
+    // Get the JD to check ownership
+    const jd = await JDService.getJDById(id)
+
+    if (!jd) {
+      return { success: false, error: "Job description not found" }
     }
 
-    const { error: deleteError } = await supabaseAdmin.from("job_descriptions").delete().eq("id", id)
+    // Check if the user owns this JD
+    if (jd.created_by_email && jd.created_by_email !== user.email) {
+      return { success: false, error: "You don't have permission to delete this job description" }
+    }
 
-    if (deleteError) throw deleteError
+    const success = await JDService.deleteJD(id)
 
-    // Log the delete action
-    await logUserAction(userEmail, "delete", "job_description", id, { title: jdData?.title })
+    if (!success) {
+      return { success: false, error: "Failed to delete job description" }
+    }
+
+    // Track user activity
+    await JDService.trackUserActivity(user.email, "delete_jd", `Deleted job description with ID: ${id}`)
 
     return { success: true }
   } catch (error) {
-    console.error("Error deleting JD:", error)
-    throw new Error(error.message || "Failed to delete job description")
-  }
-}
-
-async function logUserAction(
-  userEmail: string | undefined | null,
-  action: string,
-  resourceType: string,
-  resourceId: string | null,
-  metadata: Record<string, any> | null,
-): Promise<void> {
-  try {
-    const supabaseAdmin = getSupabaseAdmin()
-    const { error } = await supabaseAdmin.from("user_history").insert({
-      user_email: userEmail || null,
-      action,
-      resource_type: resourceType,
-      resource_id: resourceId,
-      metadata,
-      created_at: new Date().toISOString(),
-    })
-
-    if (error) throw error
-  } catch (error) {
-    console.error("Failed to log user action:", error)
-    // Don't throw here to prevent disrupting the main operation
+    console.error("Delete job description error:", error)
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
   }
 }

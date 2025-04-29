@@ -30,7 +30,7 @@ export function MobileNav() {
     { name: "History", href: "/history", icon: <History className="h-5 w-5 mr-3" /> },
     { name: "Create JD", href: "/jd/new", icon: <FileText className="h-5 w-5 mr-3" /> },
     { name: "Templates", href: "/templates", icon: <Template className="h-5 w-5 mr-3" /> },
-    { name: "Standards", href: "/standards", icon: <Award className="h-5 w-5 mr-3" /> },
+    { name: "JD Standards", href: "/standards", icon: <Award className="h-5 w-5 mr-3" /> },
   ]
 
   return (
@@ -79,13 +79,10 @@ export function MobileNav() {
               <div className="space-y-3">
                 <div className="flex items-center">
                   <div className="h-10 w-10 rounded-full bg-primary text-white flex items-center justify-center mr-3">
-                    <span className="font-medium">
-                      {authState.user?.full_name?.[0] || authState.user?.email?.[0] || "U"}
-                    </span>
+                    <span className="font-medium">{authState.user?.email?.[0] || "U"}</span>
                   </div>
                   <div className="overflow-hidden">
-                    <p className="font-medium truncate">{authState.user?.full_name || authState.user?.email}</p>
-                    <p className="text-sm text-slate-500 truncate">{authState.user?.email}</p>
+                    <p className="font-medium truncate">{authState.user?.email}</p>
                   </div>
                 </div>
                 <Button
@@ -106,12 +103,6 @@ export function MobileNav() {
                   <Button variant="outline" className="w-full justify-start">
                     <LogIn className="h-4 w-4 mr-2" />
                     Sign In
-                  </Button>
-                </Link>
-                <Link href="/signup" onClick={() => setOpen(false)} className="block">
-                  <Button className="w-full justify-start bg-primary hover:bg-primary/90">
-                    <LogIn className="h-4 w-4 mr-2" />
-                    Sign Up
                   </Button>
                 </Link>
               </div>

@@ -67,8 +67,7 @@
     "pdfjs-dist": "latest",
     "docx": "latest",
     "framer-motion": "latest",
-    "@supabase/auth-helpers-nextjs": "latest",
-    "@supabase/ssr": "latest"
+    "@supabase/auth-helpers-nextjs": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

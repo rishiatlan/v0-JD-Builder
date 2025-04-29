@@ -17,9 +17,6 @@ export default function AuthCallbackPage() {
         // Check for code in query string (from Supabase auth redirect)
         const code = searchParams.get("code")
 
-        // Get the type of auth action
-        const type = searchParams.get("type")
-
         if (code) {
           // Exchange the code for a session
           const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
@@ -28,13 +25,8 @@ export default function AuthCallbackPage() {
             throw exchangeError
           }
 
-          // If this is a password recovery, redirect to reset-password page
-          if (type === "recovery") {
-            router.push("/reset-password")
-          } else {
-            // For other auth flows (signup, login), redirect to home or dashboard
-            router.push("/")
-          }
+          // Redirect to home page after successful authentication
+          router.push("/")
         } else {
           // No code found, redirect to login
           setError("Invalid authentication link. Please try again.")
@@ -68,7 +60,7 @@ export default function AuthCallbackPage() {
             <div className="flex justify-center mb-4">
               <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
             </div>
-            <h1 className="text-xl font-semibold mb-2">Processing Authentication</h1>
+            <h1 className="text-xl font-semibold mb-2">Signing you in</h1>
             <p className="text-gray-600">Please wait while we complete the authentication process...</p>
           </>
         )}

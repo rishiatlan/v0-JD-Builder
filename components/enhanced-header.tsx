@@ -19,7 +19,6 @@ import {
   LayoutTemplateIcon as Template,
   Award,
   ChevronDown,
-  User,
 } from "lucide-react"
 import {
   DropdownMenu,
@@ -56,7 +55,7 @@ export function EnhancedHeader() {
     { name: "History", href: "/history", icon: <History className="h-4 w-4 mr-2" /> },
     { name: "Create JD", href: "/jd/new", icon: <FileText className="h-4 w-4 mr-2" /> },
     { name: "Templates", href: "/templates", icon: <Template className="h-4 w-4 mr-2" /> },
-    { name: "Standards", href: "/standards", icon: <Award className="h-4 w-4 mr-2" /> },
+    { name: "JD Standards", href: "/standards", icon: <Award className="h-4 w-4 mr-2" /> },
   ]
 
   return (
@@ -119,13 +118,9 @@ export function EnhancedHeader() {
                   <Button variant="ghost" className="flex items-center">
                     <div className="flex items-center">
                       <div className="h-8 w-8 rounded-full bg-primary text-white flex items-center justify-center mr-2">
-                        <span className="text-sm font-medium">
-                          {authState.user?.full_name?.[0] || authState.user?.email?.[0] || "U"}
-                        </span>
+                        <span className="text-sm font-medium">{authState.user?.email?.[0] || "U"}</span>
                       </div>
-                      <span className="hidden md:inline text-sm font-medium">
-                        {authState.user?.full_name || authState.user?.email}
-                      </span>
+                      <span className="hidden md:inline text-sm font-medium">{authState.user?.email}</span>
                       <ChevronDown className="h-4 w-4 ml-1" />
                     </div>
                   </Button>
@@ -133,12 +128,6 @@ export function EnhancedHeader() {
                 <DropdownMenuContent align="end" className="w-56">
                   <DropdownMenuLabel>My Account</DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem asChild>
-                    <Link href="/profile" className="cursor-pointer flex items-center">
-                      <User className="h-4 w-4 mr-2" />
-                      Profile
-                    </Link>
-                  </DropdownMenuItem>
                   <DropdownMenuItem asChild>
                     <Link href="/history" className="cursor-pointer flex items-center">
                       <History className="h-4 w-4 mr-2" />

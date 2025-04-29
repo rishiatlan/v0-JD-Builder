@@ -1,247 +1,61 @@
 "use server"
-
-import { cookies } from "next/headers"
-import { createServerClient } from "@supabase/ssr"
 import { redirect } from "next/navigation"
+import { AuthService } from "@/lib/auth-service"
+import type { UserSession } from "@/lib/session"
 
-export async function signIn(formData: FormData) {
-  const email = formData.get("email") as string
-  const password = formData.get("password") as string
-
-  const cookieStore = cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-        set(name: string, value: string, options: any) {
-          cookieStore.set({ name, value, ...options })
-        },
-        remove(name: string, options: any) {
-          cookieStore.set({ name, value: "", ...options })
-        },
-      },
-    },
-  )
-
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  })
-
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  return { success: true }
-}
-
-export async function signUp(formData: FormData) {
-  const email = formData.get("email") as string
-  const password = formData.get("password") as string
-  const fullName = formData.get("fullName") as string
-
-  if (!email || !password) {
-    return { success: false, error: "Email and password are required" }
-  }
-
+export async function sendMagicLink(formData: FormData): Promise<{ success: boolean; error?: string }> {
   try {
-    const cookieStore = cookies()
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          get(name: string) {
-            return cookieStore.get(name)?.value
-          },
-          set(name: string, value: string, options: any) {
-            cookieStore.set({ name, value, ...options })
-          },
-          remove(name: string, options: any) {
-            cookieStore.set({ name, value: "", ...options })
-          },
-        },
-      },
-    )
+    const email = formData.get("email") as string
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-        },
-      },
-    })
-
-    if (error) {
-      console.error("Supabase signup error:", error)
-      return { success: false, error: error.message }
+    if (!email) {
+      return { success: false, error: "Email is required" }
     }
 
-    // Check if user was created successfully
-    if (!data.user) {
-      return { success: false, error: "Failed to create user account" }
+    return await AuthService.sendMagicLink(email)
+  } catch (error) {
+    console.error("Send magic link error:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to send magic link",
     }
-
-    return { success: true }
-  } catch (error: any) {
-    console.error("Server signup error:", error)
-    return { success: false, error: error.message || "An unexpected error occurred" }
   }
 }
 
-export async function signOut() {
-  const cookieStore = cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-        set(name: string, value: string, options: any) {
-          cookieStore.set({ name, value, ...options })
-        },
-        remove(name: string, options: any) {
-          cookieStore.set({ name, value: "", ...options })
-        },
-      },
-    },
-  )
-
-  await supabase.auth.signOut()
-  redirect("/login")
-}
-
-export async function resetPassword(email: string) {
-  const cookieStore = cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-        set(name: string, value: string, options: any) {
-          cookieStore.set({ name, value, ...options })
-        },
-        remove(name: string, options: any) {
-          cookieStore.set({ name, value: "", ...options })
-        },
-      },
-    },
-  )
-
-  // Use the auth callback route with type=recovery
-  const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?type=recovery`
-
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: callbackUrl,
-  })
-
-  if (error) {
-    return { success: false, error: error.message }
+export async function signOut(): Promise<void> {
+  try {
+    await AuthService.signOut()
+    redirect("/")
+  } catch (error) {
+    console.error("Sign out error:", error)
+    throw error
   }
-
-  return { success: true }
 }
 
-export async function confirmPasswordReset(newPassword: string) {
-  const cookieStore = cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-        set(name: string, value: string, options: any) {
-          cookieStore.set({ name, value, ...options })
-        },
-        remove(name: string, options: any) {
-          cookieStore.set({ name, value: "", ...options })
-        },
-      },
-    },
-  )
-
-  const { error } = await supabase.auth.updateUser({
-    password: newPassword,
-  })
-
-  if (error) {
-    return { success: false, error: error.message }
-  }
-
-  return { success: true }
-}
-
-export async function getCurrentUser() {
-  const cookieStore = cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-        set(name: string, value: string, options: any) {
-          cookieStore.set({ name, value, ...options })
-        },
-        remove(name: string, options: any) {
-          cookieStore.set({ name, value: "", ...options })
-        },
-      },
-    },
-  )
-
-  const { data, error } = await supabase.auth.getSession()
-
-  if (error || !data.session) {
+export async function getCurrentUser(): Promise<UserSession | null> {
+  try {
+    const user = await AuthService.getCurrentUser()
+    return user ? { id: user.id, email: user.email, full_name: user.full_name } : null
+  } catch (error) {
+    console.error("Get current user error:", error)
     return null
   }
-
-  return data.session.user
 }
 
-export async function updateProfile(formData: FormData) {
-  const cookieStore = cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        get(name: string) {
-          return cookieStore.get(name)?.value
-        },
-        set(name: string, value: string, options: any) {
-          cookieStore.set({ name, value, ...options })
-        },
-        remove(name: string, options: any) {
-          cookieStore.set({ name, value: "", ...options })
-        },
-      },
-    },
-  )
+export async function updateProfile(_: any, formData: FormData): Promise<{ success: boolean; error?: string }> {
+  try {
+    const user = await AuthService.getCurrentUser()
+    if (!user) {
+      return { success: false, error: "Not authenticated" }
+    }
 
-  const fullName = formData.get("full_name") as string
+    const full_name = formData.get("full_name") as string
 
-  const { data, error } = await supabase.auth.updateUser({
-    data: { full_name: fullName },
-  })
-
-  if (error) {
-    return { success: false, error: error.message }
+    return await AuthService.updateProfile(user.id, { full_name })
+  } catch (error) {
+    console.error("Update profile error:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to update profile",
+    }
   }
-
-  return { success: true, user: data.user }
 }
