@@ -8,6 +8,7 @@ export default function SessionTestPage() {
   const [sessionData, setSessionData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [cookies, setCookies] = useState<string>("")
 
   const checkSession = async () => {
     try {
@@ -29,7 +30,11 @@ export default function SessionTestPage() {
   }
 
   useEffect(() => {
+    // Only run on the client side
     checkSession()
+
+    // Safely access document.cookie only in the browser
+    setCookies(document.cookie || "No cookies")
   }, [])
 
   return (
@@ -55,9 +60,14 @@ export default function SessionTestPage() {
         <h2 className="text-lg font-semibold mb-2">Local Storage:</h2>
         <Button
           onClick={() => {
-            const items = { ...localStorage }
-            console.log("Local Storage:", items)
-            alert(JSON.stringify(items, null, 2))
+            try {
+              // Safely access localStorage only in the browser
+              const items = { ...localStorage }
+              console.log("Local Storage:", items)
+              alert(JSON.stringify(items, null, 2))
+            } catch (err) {
+              console.error("Error accessing localStorage:", err)
+            }
           }}
         >
           Check Local Storage
@@ -66,7 +76,7 @@ export default function SessionTestPage() {
 
       <div className="mt-4">
         <h2 className="text-lg font-semibold mb-2">Cookies:</h2>
-        <pre className="bg-gray-100 p-4 rounded">{document.cookie || "No cookies"}</pre>
+        <pre className="bg-gray-100 p-4 rounded">{cookies}</pre>
       </div>
     </div>
   )
