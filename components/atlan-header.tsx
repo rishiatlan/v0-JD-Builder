@@ -25,7 +25,7 @@ export function AtlanHeader() {
             Templates
           </Link>
           <a
-            href="https://github.com/atlan-antfarm/jd-builder"
+            href="https://github.com/rishiatlan/v0-JD-Builder"
             target="_blank"
             rel="noopener noreferrer"
             className="text-slate-600 hover:text-atlan-primary font-medium flex items-center"

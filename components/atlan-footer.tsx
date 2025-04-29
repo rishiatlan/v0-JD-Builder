@@ -35,7 +35,7 @@ export function AtlanFooter() {
             <ul className="space-y-2">
               <li>
                 <a
-                  href="https://github.com/atlan-antfarm/jd-builder"
+                  href="https://github.com/rishiatlan/v0-JD-Builder"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-slate-400 hover:text-atlan-accent"

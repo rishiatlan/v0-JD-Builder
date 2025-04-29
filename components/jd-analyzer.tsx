@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Download } from "lucide-react"
+import { Download, Save } from "lucide-react"
 import { IntakeForm } from "@/components/intake-form"
 import { JDOutput } from "@/components/jd-output"
 import { JDAnalysis } from "@/components/jd-analysis"
@@ -10,12 +10,21 @@ import { JDRefinement } from "@/components/jd-refinement"
 import { checkJDForBias } from "@/app/actions"
 import { useToast } from "@/components/ui/use-toast"
 import { useSearchParams } from "next/navigation"
+import { JDService } from "@/lib/jd-service"
+import { ErrorTracker } from "@/lib/error-tracking"
+import { analytics } from "@/lib/analytics"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
 export function JDAnalyzer() {
   const [activeStep, setActiveStep] = useState<number>(1)
   const [jdData, setJdData] = useState<any>(null)
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false)
   const [templateData, setTemplateData] = useState<any>(null)
+  const [isSaving, setIsSaving] = useState<boolean>(false)
+  const [showEmailDialog, setShowEmailDialog] = useState<boolean>(false)
+  const [userEmail, setUserEmail] = useState<string>("")
   const { toast } = useToast()
   const searchParams = useSearchParams()
 
@@ -26,50 +35,52 @@ export function JDAnalyzer() {
     const template = searchParams.get("template")
     if (template) {
       // In a real app, we would fetch template data from an API
-      // For now, we'll just set some placeholder values based on the template name
-      if (template === "data-engineer") {
-        setTemplateData({
-          title: "Data Engineer",
-          department: "Data Engineering",
-          outcomes: "Building scalable data pipelines and ensuring data quality",
-          mindset: "Detail-oriented, problem-solving approach, and passion for data infrastructure",
-          advantage: "Enabling data-driven decision making across the organization",
-          decisions: "Balancing performance, cost, and maintainability in data systems",
-        })
-      } else if (template === "data-analyst") {
-        setTemplateData({
-          title: "Data Analyst",
-          department: "Data Analytics",
-          outcomes: "Delivering actionable insights and creating impactful visualizations",
-          mindset: "Curiosity, analytical thinking, and business acumen",
-          advantage: "Transforming raw data into strategic business insights",
-          decisions: "Prioritizing analysis requests and determining appropriate methodologies",
-        })
-      } else if (template === "product-manager") {
-        setTemplateData({
-          title: "Product Manager",
-          department: "Product",
-          outcomes: "Delivering high-impact product features that solve user problems",
-          mindset: "User-centric thinking, strategic vision, and execution focus",
-          advantage: "Building products that create sustainable competitive advantage",
-          decisions: "Balancing user needs, business goals, and technical constraints",
-        })
-      }
+      loadTemplate(template)
+    }
+  }, [searchParams])
 
-      if (templateData) {
+  const loadTemplate = async (templateId: string) => {
+    try {
+      // Fetch template from Supabase
+      const { success, data, error } = await JDService.getJD(templateId)
+
+      if (success && data) {
+        setTemplateData(data.content)
         toast({
           title: "Template Loaded",
-          description: `${templateData.title} template has been loaded. You can customize it further.`,
+          description: `${data.title} template has been loaded. You can customize it further.`,
+        })
+
+        // Track template usage
+        analytics.track("template_loaded", { templateId, title: data.title })
+      } else if (error) {
+        toast({
+          title: "Error",
+          description: `Failed to load template: ${error}`,
+          variant: "destructive",
         })
       }
+    } catch (error) {
+      ErrorTracker.captureError(error, { action: "loadTemplate", templateId })
+      toast({
+        title: "Error",
+        description: "Failed to load template. Please try again.",
+        variant: "destructive",
+      })
     }
-  }, [searchParams, toast, templateData])
+  }
 
   const handleIntakeSubmit = (data: any) => {
     setIsAnalyzing(true)
     setJdData(data)
     setIsAnalyzing(false)
     setActiveStep(2)
+
+    // Track JD generation
+    analytics.track("jd_generation_completed", {
+      title: data.title,
+      department: data.department,
+    })
   }
 
   const handleRefinementComplete = async (refinedData: any) => {
@@ -96,6 +107,12 @@ export function JDAnalyzer() {
           ...refinedData,
           biasFlags: biasResult.biasFlags,
         })
+
+        // Track refinement completion
+        analytics.track("jd_refinement_completed", {
+          title: jdData.title,
+          biasFlags: biasResult.biasFlags?.length || 0,
+        })
       } else {
         toast({
           title: "Warning",
@@ -109,7 +126,7 @@ export function JDAnalyzer() {
         })
       }
     } catch (error) {
-      console.error("Error during refinement completion:", error)
+      ErrorTracker.captureError(error, { action: "refinementComplete" })
       toast({
         title: "Error",
         description: "An error occurred during final processing. You can still proceed with the JD.",
@@ -123,6 +140,71 @@ export function JDAnalyzer() {
     } finally {
       setIsAnalyzing(false)
       setActiveStep(3)
+    }
+  }
+
+  const handleSaveJD = async () => {
+    if (!jdData) return
+
+    // Show email dialog
+    setShowEmailDialog(true)
+  }
+
+  const handleSaveWithEmail = async () => {
+    if (!jdData) return
+
+    // Validate email
+    if (!userEmail || !userEmail.includes("@")) {
+      toast({
+        title: "Invalid Email",
+        description: "Please enter a valid email address",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsSaving(true)
+    setShowEmailDialog(false)
+
+    try {
+      const jdToSave = {
+        title: jdData.title,
+        department: jdData.department,
+        content: jdData,
+        user_email: userEmail,
+        is_public: true, // Default to public
+      }
+
+      const { success, data, error } = await JDService.saveJD(jdToSave)
+
+      if (success) {
+        toast({
+          title: "Success",
+          description: "Job description saved successfully!",
+        })
+
+        // Track save event
+        analytics.track("jd_saved", {
+          id: data?.id,
+          title: jdData.title,
+          userEmail,
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: error || "Failed to save job description",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      ErrorTracker.captureError(error, { action: "saveJD" }, userEmail)
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while saving",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -198,6 +280,12 @@ export function JDAnalyzer() {
       description: "Job description downloaded successfully!",
       variant: "default",
     })
+
+    // Track download event
+    analytics.track("jd_downloaded", {
+      title: jdData.title,
+      format: "txt",
+    })
   }
 
   return (
@@ -255,14 +343,57 @@ export function JDAnalyzer() {
         <div className="bg-white rounded-lg shadow-lg p-6 border border-slate-200">
           <div className="flex justify-between items-center mb-6">
             <h3 className="text-xl font-semibold text-atlan-primary">Final Job Description</h3>
-            <Button onClick={handleDownload} className="bg-atlan-primary hover:bg-atlan-primary-dark">
-              <Download className="mr-2 h-4 w-4" />
-              Download JD
-            </Button>
+            <div className="flex space-x-3">
+              <Button
+                onClick={handleSaveJD}
+                className="bg-atlan-primary hover:bg-atlan-primary-dark"
+                disabled={isSaving}
+              >
+                <Save className="mr-2 h-4 w-4" />
+                {isSaving ? "Saving..." : "Save JD"}
+              </Button>
+              <Button onClick={handleDownload} className="bg-atlan-primary hover:bg-atlan-primary-dark">
+                <Download className="mr-2 h-4 w-4" />
+                Download JD
+              </Button>
+            </div>
           </div>
           <JDOutput data={jdData} />
         </div>
       )}
+
+      {/* Email Collection Dialog */}
+      <Dialog open={showEmailDialog} onOpenChange={setShowEmailDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Save Your Job Description</DialogTitle>
+            <DialogDescription>
+              Please provide your email address to save this job description. We'll use this to help you access your JD
+              later.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">Email Address</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="name@example.com"
+                value={userEmail}
+                onChange={(e) => setUserEmail(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end space-x-2">
+              <Button variant="outline" onClick={() => setShowEmailDialog(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveWithEmail} className="bg-atlan-primary hover:bg-atlan-primary-dark">
+                Save JD
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

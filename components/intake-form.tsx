@@ -9,9 +9,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Upload, FileText, Loader2, AlertCircle } from "lucide-react"
+import { Upload, FileText, Loader2, AlertCircle, Eye } from "lucide-react"
 import { generateJD, analyzeUploadedDocument } from "@/app/actions"
 import { useToast } from "@/components/ui/use-toast"
+import { DocumentParser } from "@/components/document-parser"
 
 interface IntakeFormProps {
   onSubmit: (data: any) => void
@@ -33,6 +34,7 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
   const [fileContent, setFileContent] = useState<string | null>(null)
   const [localLoading, setLocalLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showPreview, setShowPreview] = useState(false)
   const { toast } = useToast()
 
   // Apply initial data if provided
@@ -52,60 +54,59 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setError(null)
+    setFileContent(null)
+
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0]
-      setFile(selectedFile)
 
-      // Read file content immediately on selection
-      readFileContent(selectedFile)
+      // Check file size (limit to 10MB)
+      if (selectedFile.size > 10 * 1024 * 1024) {
+        setError("File size exceeds 10MB limit. Please upload a smaller file.")
+        toast({
+          title: "Error",
+          description: "File size exceeds 10MB limit. Please upload a smaller file.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Check file type
+      const validTypes = [".pdf", ".docx", ".txt"]
+      const fileExtension = selectedFile.name.substring(selectedFile.name.lastIndexOf(".")).toLowerCase()
+
+      if (!validTypes.includes(fileExtension)) {
+        setError("Invalid file type. Please upload a PDF, DOCX, or TXT file.")
+        toast({
+          title: "Error",
+          description: "Invalid file type. Please upload a PDF, DOCX, or TXT file.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      setFile(selectedFile)
+      toast({
+        title: "File selected",
+        description: `${selectedFile.name} has been selected. Parsing will begin automatically.`,
+      })
     }
   }
 
-  const readFileContent = (file: File) => {
-    const reader = new FileReader()
+  const handleContentParsed = (content: string) => {
+    setFileContent(content)
+    toast({
+      title: "File parsed successfully",
+      description: `${file?.name} has been parsed and is ready for analysis.`,
+    })
+  }
 
-    reader.onload = (event) => {
-      try {
-        if (event.target?.result) {
-          const content = event.target.result.toString()
-          setFileContent(content)
-          console.log("File content loaded successfully:", content.substring(0, 100) + "...")
-        }
-      } catch (err) {
-        console.error("Error reading file:", err)
-        setError("Failed to read file content. Please try a different file.")
-        toast({
-          title: "Error",
-          description: "Failed to read file content. Please try a different file.",
-          variant: "destructive",
-        })
-      }
-    }
-
-    reader.onerror = () => {
-      console.error("FileReader error:", reader.error)
-      setError("Error reading file. Please try again.")
-      toast({
-        title: "Error",
-        description: "Error reading file. Please try again.",
-        variant: "destructive",
-      })
-    }
-
-    // Read as text for TXT files
-    if (file.name.endsWith(".txt")) {
-      reader.readAsText(file)
-    }
-    // For other file types (like PDF, DOCX), we can only extract text content on the server
-    // For now, we'll just read as text and handle potential parsing issues
-    else {
-      reader.readAsText(file)
-      toast({
-        title: "Warning",
-        description: "Only plain text content can be extracted from this file type. Complex formatting may be lost.",
-        variant: "default",
-      })
-    }
+  const handleParseError = (errorMessage: string) => {
+    setError(errorMessage)
+    toast({
+      title: "Error",
+      description: errorMessage,
+      variant: "destructive",
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -311,7 +312,13 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
                       Drag and drop or click to upload a PDF, DOCX, or TXT file
                     </p>
                   </div>
-                  <Input id="file-upload" type="file" className="hidden" accept=".txt" onChange={handleFileChange} />
+                  <Input
+                    id="file-upload"
+                    type="file"
+                    className="hidden"
+                    accept=".pdf,.docx,.txt"
+                    onChange={handleFileChange}
+                  />
                   <Button
                     onClick={() => document.getElementById("file-upload")?.click()}
                     variant="outline"
@@ -322,24 +329,52 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
                 </div>
               </div>
 
+              {/* Document Parser Component */}
+              {file && <DocumentParser file={file} onContentParsed={handleContentParsed} onError={handleParseError} />}
+
               {file && (
                 <div className="bg-slate-100 p-4 rounded-lg flex items-center justify-between">
                   <div className="flex items-center">
                     <FileText className="h-5 w-5 text-atlan-primary mr-2" />
                     <span className="text-sm font-medium">{file.name}</span>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setFile(null)
-                      setFileContent(null)
-                      setError(null)
-                    }}
-                    className="text-slate-500 hover:text-slate-700"
-                  >
-                    Remove
-                  </Button>
+                  <div className="flex items-center space-x-2">
+                    {fileContent && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowPreview(!showPreview)}
+                        className="text-slate-500 hover:text-slate-700 flex items-center"
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        {showPreview ? "Hide Preview" : "Preview"}
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setFile(null)
+                        setFileContent(null)
+                        setError(null)
+                        setShowPreview(false)
+                      }}
+                      className="text-slate-500 hover:text-slate-700"
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Document Preview */}
+              {showPreview && fileContent && (
+                <div className="border border-slate-200 rounded-md p-4 mt-4 max-h-64 overflow-auto bg-slate-50">
+                  <h4 className="font-medium mb-2">Document Preview:</h4>
+                  <pre className="text-sm whitespace-pre-wrap">
+                    {fileContent.substring(0, 1000)}
+                    {fileContent.length > 1000 ? "..." : ""}
+                  </pre>
                 </div>
               )}
 
@@ -353,7 +388,7 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
               <Button
                 onClick={handleSubmit}
                 className="w-full bg-atlan-primary hover:bg-atlan-primary-dark"
-                disabled={!file || isLoading || localLoading}
+                disabled={!fileContent || isLoading || localLoading}
               >
                 {isLoading || localLoading ? (
                   <>
