@@ -2,15 +2,14 @@
 
 import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
-import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Loader2 } from "lucide-react"
+import { supabase } from "@/lib/supabase-client"
 
 export default function AuthCallbackPage() {
   const [error, setError] = useState<string | null>(null)
   const [debugInfo, setDebugInfo] = useState<string | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
-  const supabase = createClientComponentClient()
 
   useEffect(() => {
     const handleCallback = async () => {
@@ -25,24 +24,23 @@ export default function AuthCallbackPage() {
         }
 
         setDebugInfo("Processing authentication...")
+        console.log("Auth callback: Processing code")
 
         // Exchange the code for a session
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+        const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
 
         if (exchangeError) {
+          console.error("Auth callback: Code exchange failed", exchangeError)
           throw exchangeError
         }
 
-        // Verify the session was created
-        const {
-          data: { session },
-        } = await supabase.auth.getSession()
-
-        if (!session) {
+        if (!data.session) {
+          console.error("Auth callback: No session created")
           throw new Error("Failed to establish session")
         }
 
-        setDebugInfo(`Authentication successful for ${session.user.email}`)
+        console.log("Auth callback: Session established for", data.session.user.email)
+        setDebugInfo(`Authentication successful for ${data.session.user.email}`)
 
         // Force a full page reload to ensure the session is recognized everywhere
         window.location.href = "/"
@@ -54,7 +52,7 @@ export default function AuthCallbackPage() {
     }
 
     handleCallback()
-  }, [router, searchParams, supabase.auth])
+  }, [router, searchParams])
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">

@@ -34,8 +34,17 @@ export async function GET(request: NextRequest) {
 
     console.log("Auth callback: Session established for", data.session.user.email)
 
-    // Redirect to the client-side callback page to handle the session
-    return NextResponse.redirect(`${requestUrl.origin}/auth/callback?code=${code}`)
+    // Set a cookie to indicate successful authentication
+    const response = NextResponse.redirect(`${requestUrl.origin}/auth/callback?code=${code}`)
+    response.cookies.set("auth_success", "true", {
+      httpOnly: true,
+      maxAge: 60, // 1 minute
+      path: "/",
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+    })
+
+    return response
   } catch (error) {
     console.error("Auth callback exception:", error)
     const errorMessage = error instanceof Error ? error.message : "Unknown error"
