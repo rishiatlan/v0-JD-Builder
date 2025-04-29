@@ -3,48 +3,58 @@
 import { useEffect, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Loader2 } from "lucide-react"
-import { supabase } from "@/lib/supabase-client"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 
 export default function AuthCallbackPage() {
-  const router = useRouter()
-  const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
   const [isProcessing, setIsProcessing] = useState(true)
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const supabase = createClientComponentClient()
 
   useEffect(() => {
-    async function handleAuth() {
-      // This should be looking for 'code', not 'token'
-      const code = searchParams.get("code")
+    const handleCallback = async () => {
+      try {
+        // Get the code from the URL
+        const code = searchParams.get("code")
 
-      if (code) {
-        console.log("Auth callback: Processing code")
-        try {
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code)
-
-          if (error) {
-            console.error("Error exchanging code:", error.message)
-            setError(error.message)
-            setTimeout(() => router.push("/login?error=auth_failed"), 3000)
-          } else {
-            console.log("Session successfully established for:", data.session?.user.email)
-            // Force a full page reload to ensure the session is recognized everywhere
-            window.location.href = "/"
-          }
-        } catch (err: any) {
-          console.error("Auth callback error:", err)
-          setError(err.message || "Authentication failed")
-          setTimeout(() => router.push("/login?error=auth_exception"), 3000)
+        if (!code) {
+          setError("Missing authentication code. Please try again.")
+          setTimeout(() => router.push("/login"), 3000)
+          return
         }
-      } else {
-        console.error("No code found in URL")
-        setError("No authentication code found in URL")
-        setTimeout(() => router.push("/login?error=missing_code"), 3000)
+
+        console.log("Auth callback: Processing code")
+
+        // Exchange the code for a session
+        // This will automatically use the code_verifier stored in the browser
+        const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+
+        if (exchangeError) {
+          console.error("Error exchanging code:", exchangeError)
+          throw exchangeError
+        }
+
+        if (!data.session) {
+          console.error("No session created")
+          throw new Error("Failed to establish session")
+        }
+
+        console.log("Session established for:", data.session.user.email)
+
+        // Force a full page reload to ensure the session is recognized everywhere
+        window.location.href = "/"
+      } catch (err: any) {
+        console.error("Auth callback error:", err)
+        setError(err.message || "Authentication failed")
+        setTimeout(() => router.push("/login"), 3000)
+      } finally {
+        setIsProcessing(false)
       }
-      setIsProcessing(false)
     }
 
-    handleAuth()
-  }, [searchParams, router])
+    handleCallback()
+  }, [router, searchParams, supabase.auth])
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
