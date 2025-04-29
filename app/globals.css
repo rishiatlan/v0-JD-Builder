@@ -81,3 +81,30 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Button animations */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+.animate-pulse {
+  animation: pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Button press effect */
+button:active:not(:disabled) {
+  transform: scale(0.98);
+  transition: transform 0.1s;
+}
+
+/* Improved button hover effect */
+.bg-atlan-primary:hover:not(:disabled) {
+  box-shadow: 0 0 0 2px rgba(79, 70, 229, 0.2);
+  transition: all 0.2s ease;
+}

@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Button } from "@/components/ui/button"
@@ -11,18 +11,54 @@ import { CheckCircle, RefreshCw, Loader2 } from "lucide-react"
 import { getSectionRefinements } from "@/app/actions"
 import { useToast } from "@/components/ui/use-toast"
 
+// Add this at the top of the file if it doesn't exist
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value)
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value)
+    }, delay)
+
+    return () => {
+      clearTimeout(handler)
+    }
+  }, [value, delay])
+
+  return debouncedValue
+}
+
 interface JDRefinementProps {
   data: any
   onComplete: (refinedData: any) => void
+  isLoading?: boolean
 }
 
-export function JDRefinement({ data, onComplete }: JDRefinementProps) {
+export function JDRefinement({
+  data,
+  onComplete,
+  isLoading = false,
+}: {
+  data: any
+  onComplete: (data: any) => void
+  isLoading?: boolean
+}) {
   const [activeTab, setActiveTab] = useState<string>("overview")
   const [sections, setSections] = useState(data.sections)
   const [suggestions, setSuggestions] = useState(data.suggestions || [])
   const [appliedSuggestions, setAppliedSuggestions] = useState<string[]>([])
   const [isLoadingSuggestions, setIsLoadingSuggestions] = useState(false)
   const { toast } = useToast()
+
+  // Add this near the top of the component, after the useState declarations
+  const debouncedSectionContent = useDebounce(
+    typeof sections[activeTab] === "string"
+      ? sections[activeTab]
+      : Array.isArray(sections[activeTab])
+        ? sections[activeTab].join("\n")
+        : "",
+    1000,
+  )
 
   const handleSectionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -40,8 +76,21 @@ export function JDRefinement({ data, onComplete }: JDRefinementProps) {
     setAppliedSuggestions((prev) => [...prev, `${suggestion.section}-${suggestion.original}`])
   }
 
-  const handleComplete = () => {
-    onComplete({ sections })
+  const handleFinalize = () => {
+    // Provide immediate visual feedback
+    const button = document.querySelector('button:contains("Finalize JD")')
+    if (button) {
+      button.classList.add("animate-pulse")
+    }
+
+    // Call the onComplete callback with the current state
+    onComplete({
+      title: data.title,
+      department: data.department,
+      sections: {
+        ...sections,
+      },
+    })
   }
 
   const getSectionSuggestions = (section: string) => {
@@ -59,6 +108,12 @@ export function JDRefinement({ data, onComplete }: JDRefinementProps) {
     try {
       const content = typeof sections[activeTab] === "string" ? sections[activeTab] : sections[activeTab].join("\n")
 
+      // Add a loading toast to improve UX
+      toast({
+        title: "Generating suggestions",
+        description: "AI is analyzing your content...",
+      })
+
       const result = await getSectionRefinements(activeTab, content)
 
       if (result.success) {
@@ -70,6 +125,11 @@ export function JDRefinement({ data, onComplete }: JDRefinementProps) {
 
         // Add new suggestions to existing ones
         setSuggestions((prev) => [...prev.filter((s: any) => s.section !== activeTab), ...formattedSuggestions])
+
+        toast({
+          title: "Suggestions ready",
+          description: `${formattedSuggestions.length} suggestions generated for ${activeTab} section`,
+        })
       } else {
         toast({
           title: "Error",
@@ -89,13 +149,23 @@ export function JDRefinement({ data, onComplete }: JDRefinementProps) {
     }
   }
 
-  // When tab changes, fetch suggestions if none exist for that section
+  // Add this useEffect to trigger suggestion fetching when content changes significantly
   useEffect(() => {
+    // Only fetch new suggestions if the content has changed significantly (more than 50 characters)
     const existingSuggestions = getSectionSuggestions(activeTab)
-    if (existingSuggestions.length === 0) {
+    const currentContent = debouncedSectionContent
+
+    // Store the last content we fetched suggestions for
+    const lastContent = useRef("")
+
+    if (
+      existingSuggestions.length === 0 ||
+      (currentContent && lastContent.current && Math.abs(currentContent.length - lastContent.current.length) > 50)
+    ) {
+      lastContent.current = currentContent
       fetchSuggestions()
     }
-  }, [activeTab])
+  }, [debouncedSectionContent])
 
   return (
     <Card>
@@ -375,8 +445,19 @@ export function JDRefinement({ data, onComplete }: JDRefinementProps) {
         </Tabs>
 
         <div className="mt-6 flex justify-end">
-          <Button onClick={handleComplete} className="bg-atlan-primary hover:bg-atlan-primary-dark">
-            Finalize Job Description
+          <Button
+            onClick={handleFinalize}
+            className="bg-atlan-primary hover:bg-atlan-primary-dark text-white"
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <span className="animate-pulse mr-2">⚡</span>
+                Finalizing...
+              </>
+            ) : (
+              "Finalize JD"
+            )}
           </Button>
         </div>
       </CardContent>

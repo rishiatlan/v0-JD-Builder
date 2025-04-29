@@ -153,6 +153,12 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
     setLastSubmitTime(now)
 
     try {
+      // Show a loading toast to improve UX
+      toast({
+        title: "Processing your request",
+        description: "This may take up to 30 seconds...",
+      })
+
       if (activeTab === "questionnaire") {
         console.log("Submitting questionnaire data:", debouncedFormData)
 
@@ -168,6 +174,10 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
 
         if (result.success) {
           onSubmit(result.data)
+          toast({
+            title: "Success!",
+            description: "Your job description has been generated successfully.",
+          })
         } else {
           setError(result.error || "Failed to generate job description")
           toast({
@@ -185,6 +195,10 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
 
         if (result.success) {
           onSubmit(result.data)
+          toast({
+            title: "Success!",
+            description: "Your document has been analyzed and a job description has been generated.",
+          })
         } else {
           // Check if the error is related to the Gemini API being overloaded
           if (result.error?.includes("overloaded") || result.error?.includes("503")) {

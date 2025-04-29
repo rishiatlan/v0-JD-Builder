@@ -25,6 +25,9 @@ export function AtlanHeader() {
           <Link href="/history" className="text-slate-600 hover:text-atlan-primary font-medium">
             History
           </Link>
+          <Link href="/jd/new" className="text-slate-600 hover:text-atlan-primary font-medium">
+            Create JD
+          </Link>
           <Link href="/templates" className="text-slate-600 hover:text-atlan-primary font-medium">
             Templates
           </Link>

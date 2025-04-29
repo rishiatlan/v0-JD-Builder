@@ -13,6 +13,7 @@ import { Loader2, FileText, Trash2, ExternalLink, Clock, User } from "lucide-rea
 import Link from "next/link"
 import { formatDistanceToNow } from "date-fns"
 import { ProtectedRoute } from "@/components/protected-route"
+import { useRouter } from "next/navigation"
 
 // Add the dynamic export at the top of the file
 export const dynamic = "force-dynamic"
@@ -26,6 +27,7 @@ export default function HistoryPage() {
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const { authState } = useAuth()
   const { toast } = useToast()
+  const router = useRouter()
 
   useEffect(() => {
     const loadData = async () => {
@@ -181,7 +183,7 @@ export default function HistoryPage() {
                     <span>My Job Descriptions</span>
                     <Button
                       className="bg-atlan-primary hover:bg-atlan-primary-dark"
-                      onClick={() => (window.location.href = "/")}
+                      onClick={() => router.push("/jd/new")}
                     >
                       Create New JD
                     </Button>
