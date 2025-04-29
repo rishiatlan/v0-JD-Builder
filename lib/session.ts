@@ -1,9 +1,6 @@
 import { cookies } from "next/headers"
-import { sign, verify } from "jsonwebtoken"
 import { query } from "@/lib/db"
-
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key"
-const TOKEN_EXPIRY = "7d"
+import { generateRandomString, hashString } from "@/lib/browser-crypto"
 
 export interface UserSession {
   id: string
@@ -11,46 +8,101 @@ export interface UserSession {
   full_name: string | null
 }
 
+// Generate a random session token
+function generateSessionToken(): string {
+  return generateRandomString(32)
+}
+
+// Hash a session token for storage
+async function hashToken(token: string): Promise<string> {
+  return await hashString(token)
+}
+
 export async function createSession(user: { id: string; email: string }): Promise<string> {
-  // Generate JWT token
-  const token = sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: TOKEN_EXPIRY })
+  try {
+    // Generate a random session token
+    const sessionToken = generateSessionToken()
+    const hashedToken = await hashToken(sessionToken)
 
-  // Set cookie
-  cookies().set("auth_token", token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "strict",
-    maxAge: 7 * 24 * 60 * 60, // 7 days
-    path: "/",
-  })
+    // Store the session in the database
+    const insertQuery = `
+      INSERT INTO user_sessions (
+        user_id,
+        token_hash,
+        expires_at
+      )
+      VALUES ($1, $2, $3)
+      RETURNING id
+    `
 
-  return token
+    // Session expires in 7 days
+    const expiresAt = new Date()
+    expiresAt.setDate(expiresAt.getDate() + 7)
+
+    await query(insertQuery, [user.id, hashedToken, expiresAt.toISOString()])
+
+    // Set the session cookie
+    cookies().set("session_token", sessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60, // 7 days
+      path: "/",
+    })
+
+    return sessionToken
+  } catch (error) {
+    console.error("Error creating session:", error)
+    throw new Error("Failed to create session")
+  }
 }
 
 export async function getSession(): Promise<UserSession | null> {
   try {
-    const token = cookies().get("auth_token")?.value
+    const sessionToken = cookies().get("session_token")?.value
 
-    if (!token) {
+    if (!sessionToken) {
       return null
     }
 
-    try {
-      const decoded = verify(token, JWT_SECRET) as { id: string; email: string }
+    const hashedToken = await hashToken(sessionToken)
 
-      const users = await query<UserSession>("SELECT id, email, full_name FROM user_profiles WHERE id = $1", [
-        decoded.id,
-      ])
+    // Get the session from the database
+    const sessionQuery = `
+      SELECT 
+        s.user_id,
+        s.expires_at,
+        u.email,
+        u.full_name
+      FROM 
+        user_sessions s
+      JOIN 
+        user_profiles u ON s.user_id = u.id
+      WHERE 
+        s.token_hash = $1 AND
+        s.expires_at > $2
+    `
 
-      if (users.length === 0) {
-        return null
-      }
+    const now = new Date().toISOString()
+    const sessions = await query<{
+      user_id: string
+      email: string
+      full_name: string | null
+      expires_at: string
+    }>(sessionQuery, [hashedToken, now])
 
-      return users[0]
-    } catch (error) {
-      // Invalid token
-      cookies().delete("auth_token")
+    if (sessions.length === 0) {
+      // Session not found or expired
+      cookies().delete("session_token")
       return null
+    }
+
+    const session = sessions[0]
+
+    return {
+      id: session.user_id,
+      email: session.email,
+      full_name: session.full_name,
     }
   } catch (error) {
     console.error("Get session error:", error)
@@ -59,7 +111,25 @@ export async function getSession(): Promise<UserSession | null> {
 }
 
 export async function destroySession(): Promise<void> {
-  cookies().delete("auth_token")
+  try {
+    const sessionToken = cookies().get("session_token")?.value
+
+    if (sessionToken) {
+      const hashedToken = await hashToken(sessionToken)
+
+      // Delete the session from the database
+      const deleteQuery = `
+        DELETE FROM user_sessions
+        WHERE token_hash = $1
+      `
+
+      await query(deleteQuery, [hashedToken])
+    }
+
+    cookies().delete("session_token")
+  } catch (error) {
+    console.error("Error destroying session:", error)
+  }
 }
 
 export async function requireAuth(): Promise<UserSession> {

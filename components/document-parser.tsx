@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { Loader2, AlertCircle, CheckCircle } from "lucide-react"
 import dynamic from "next/dynamic"
 import { documentCache } from "@/lib/document-cache"
@@ -23,19 +23,19 @@ export function DocumentParser({ file, onContentParsed, onError }: DocumentParse
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
   const [errorDetails, setErrorDetails] = useState<string | null>(null)
   const { toast } = useToast()
-  const [isProcessed, setIsProcessed] = useState(false)
+  // Replace the existing isProcessed state with a useRef to track if we've processed this file
+  const processedFileRef = useRef<string | null>(null)
 
   // Memoize the parse function to avoid recreating it on each render
   const parseDocument = useCallback(
     async (fileToProcess: File) => {
-      // If we've already processed this file, don't do it again
-      if (isProcessed) return
+      // No need to check isProcessed here anymore, we're using the ref in useEffect
 
       setIsLoading(true)
       setStatus("loading")
       setProgress(5)
       setErrorDetails(null)
-      setIsProcessed(true) // Mark as processed
+      //setIsProcessed(true) // Mark as processed
 
       try {
         // Check if we already have this document in cache
@@ -107,7 +107,7 @@ export function DocumentParser({ file, onContentParsed, onError }: DocumentParse
         setIsLoading(false)
       }
     },
-    [onContentParsed, onError, isProcessed],
+    [onContentParsed, onError],
   )
 
   // Parse text files using FileReader
@@ -236,11 +236,13 @@ export function DocumentParser({ file, onContentParsed, onError }: DocumentParse
     })
   }
 
-  // Effect to trigger parsing when file changes
+  // Replace the existing useEffect with this implementation
   useEffect(() => {
-    if (file) {
-      setIsProcessed(false) // Reset the processed flag for new files
+    if (file && (!processedFileRef.current || processedFileRef.current !== file.name)) {
+      // Only parse if we haven't processed this file yet
       parseDocument(file)
+      // Track that we've processed this file
+      processedFileRef.current = file.name
 
       analytics.track("document_upload", {
         fileType: file.type,

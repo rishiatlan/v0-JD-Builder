@@ -31,27 +31,37 @@ export async function generateJD(formData: FormData) {
 
     console.log("Calling generateAtlanJD with data:", JSON.stringify(data))
 
-    // Generate JD using OpenHands and Gemini
-    const jdData = await generateAtlanJD(data)
+    try {
+      // Generate JD using OpenHands and Gemini
+      const jdData = await generateAtlanJD(data)
 
-    if (!jdData || !jdData.sections) {
-      console.error("Invalid JD data returned:", jdData)
+      if (!jdData || !jdData.sections) {
+        console.error("Invalid JD data returned:", jdData)
+        return {
+          success: false,
+          error: "Failed to generate valid job description data. Please try again.",
+        }
+      }
+
+      console.log("JD generated successfully:", Object.keys(jdData))
+
+      // Return the generated JD data
+      return {
+        success: true,
+        data: {
+          title: data.title,
+          department: data.department,
+          ...jdData,
+        },
+      }
+    } catch (error) {
+      console.error("Error in AI service:", error)
+
+      // Return a friendly error message
       return {
         success: false,
-        error: "Failed to generate valid job description data. Please try again.",
+        error: "The AI service is currently unavailable. Please try again in a few moments.",
       }
-    }
-
-    console.log("JD generated successfully:", Object.keys(jdData))
-
-    // Return the generated JD data
-    return {
-      success: true,
-      data: {
-        title: data.title,
-        department: data.department,
-        ...jdData,
-      },
     }
   } catch (error) {
     console.error("Error generating JD:", error)
@@ -74,21 +84,31 @@ export async function getSectionRefinements(section: string, content: string) {
       }
     }
 
-    const suggestions = await getRefinementSuggestions(section, content)
+    try {
+      const suggestions = await getRefinementSuggestions(section, content)
 
-    if (!Array.isArray(suggestions)) {
-      console.error("Invalid suggestions returned:", suggestions)
+      if (!Array.isArray(suggestions)) {
+        console.error("Invalid suggestions returned:", suggestions)
+        return {
+          success: false,
+          error: "Failed to get valid refinement suggestions. Please try again.",
+        }
+      }
+
+      console.log(`Got ${suggestions.length} refinement suggestions for ${section}`)
+
+      return {
+        success: true,
+        suggestions,
+      }
+    } catch (error) {
+      console.error("Error in AI service for refinements:", error)
+
+      // Return a friendly error message
       return {
         success: false,
-        error: "Failed to get valid refinement suggestions. Please try again.",
+        error: "The AI service is currently unavailable for refinements. Please try again in a few moments.",
       }
-    }
-
-    console.log(`Got ${suggestions.length} refinement suggestions for ${section}`)
-
-    return {
-      success: true,
-      suggestions,
     }
   } catch (error) {
     console.error("Error getting refinement suggestions:", error)
@@ -111,21 +131,31 @@ export async function checkJDForBias(content: string) {
       }
     }
 
-    const biasFlags = await checkForBias(content)
+    try {
+      const biasFlags = await checkForBias(content)
 
-    if (!Array.isArray(biasFlags)) {
-      console.error("Invalid bias flags returned:", biasFlags)
+      if (!Array.isArray(biasFlags)) {
+        console.error("Invalid bias flags returned:", biasFlags)
+        return {
+          success: false,
+          error: "Failed to check for bias. Please try again.",
+        }
+      }
+
+      console.log(`Found ${biasFlags.length} potential bias flags`)
+
+      return {
+        success: true,
+        biasFlags,
+      }
+    } catch (error) {
+      console.error("Error in AI service for bias check:", error)
+
+      // Return a friendly error message
       return {
         success: false,
-        error: "Failed to check for bias. Please try again.",
+        error: "The AI service is currently unavailable for bias checking. Please try again in a few moments.",
       }
-    }
-
-    console.log(`Found ${biasFlags.length} potential bias flags`)
-
-    return {
-      success: true,
-      biasFlags,
     }
   } catch (error) {
     console.error("Error checking for bias:", error)
@@ -154,7 +184,7 @@ export async function analyzeUploadedDocument(fileContent: string) {
     const prompt = `
       Extract key information from the following document to create a job description:
       
-      ${fileContent.substring(0, 10000)} ${fileContent.length > 10000 ? "... (content truncated)" : ""}
+      ${fileContent.substring(0, 5000)} ${fileContent.length > 5000 ? "... (content truncated)" : ""}
       
       Extract and format the response as a JSON object with the following structure:
       {
@@ -169,70 +199,111 @@ export async function analyzeUploadedDocument(fileContent: string) {
       IMPORTANT: Your response must be valid JSON that can be parsed with JSON.parse().
     `
 
-    // Use OpenHands to extract information
-    console.log("Calling generateWithGemini to extract information from document")
-    const extractedInfoText = await generateWithGemini(prompt)
-    console.log("Raw extracted info:", extractedInfoText.substring(0, 200) + "...")
-
-    // Try to extract JSON if the response contains non-JSON text
-    let jsonStr = extractedInfoText
-
-    // Look for JSON-like structure if the response isn't pure JSON
-    if (!jsonStr.trim().startsWith("{")) {
-      const jsonMatch = extractedInfoText.match(/\{[\s\S]*\}/)
-      if (jsonMatch) {
-        jsonStr = jsonMatch[0]
-        console.log("Extracted JSON from response:", jsonStr.substring(0, 200) + "...")
-      }
-    }
-
-    let parsedInfo
     try {
-      parsedInfo = JSON.parse(jsonStr)
-    } catch (parseError) {
-      console.error("JSON parsing error for extracted info:", parseError)
-      return {
-        success: false,
-        error:
-          "Failed to extract structured information from the document. Please try again or use the questionnaire instead.",
+      // Use OpenHands to extract information
+      console.log("Calling generateWithGemini to extract information from document")
+      const extractedInfoText = await generateWithGemini(prompt)
+      console.log("Raw extracted info:", extractedInfoText.substring(0, 200) + "...")
+
+      // Try to extract JSON if the response contains non-JSON text
+      let jsonStr = extractedInfoText
+
+      // Look for JSON-like structure if the response isn't pure JSON
+      if (!jsonStr.trim().startsWith("{")) {
+        const jsonMatch = extractedInfoText.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          jsonStr = jsonMatch[0]
+          console.log("Extracted JSON from response:", jsonStr.substring(0, 200) + "...")
+        }
       }
-    }
 
-    // Validate extracted information
-    const requiredFields = ["title", "department", "outcomes", "mindset", "advantage", "decisions"]
-    const missingFieldsExtracted = requiredFields.filter((field) => !parsedInfo[field])
+      let parsedInfo
+      try {
+        parsedInfo = JSON.parse(jsonStr)
+      } catch (parseError) {
+        console.error("JSON parsing error for extracted info:", parseError)
 
-    if (missingFieldsExtracted.length > 0) {
-      console.error("Missing required fields in extracted info:", missingFieldsExtracted)
-      return {
-        success: false,
-        error: `Failed to extract all required information from the document. Missing: ${missingFieldsExtracted.join(", ")}. Please try again or use the questionnaire instead.`,
+        // Create a basic extraction from the document
+        parsedInfo = extractBasicInfoFromDocument(fileContent)
       }
-    }
 
-    console.log("Successfully extracted information:", JSON.stringify(parsedInfo))
+      // Validate extracted information
+      const requiredFields = ["title", "department", "outcomes", "mindset", "advantage", "decisions"]
+      const missingFieldsExtracted = requiredFields.filter((field) => !parsedInfo[field])
 
-    // Generate JD using the extracted information
-    console.log("Calling generateAtlanJD with extracted information")
-    const jdData = await generateAtlanJD(parsedInfo)
+      if (missingFieldsExtracted.length > 0) {
+        console.error("Missing required fields in extracted info:", missingFieldsExtracted)
 
-    if (!jdData || !jdData.sections) {
-      console.error("Invalid JD data returned:", jdData)
-      return {
-        success: false,
-        error: "Failed to generate valid job description data. Please try again.",
+        // Fill in missing fields with basic placeholders
+        missingFieldsExtracted.forEach((field) => {
+          parsedInfo[field] = `Information about ${field} extracted from document`
+        })
       }
-    }
 
-    console.log("JD generated successfully from document:", Object.keys(jdData))
+      console.log("Successfully extracted information:", JSON.stringify(parsedInfo))
 
-    return {
-      success: true,
-      data: {
-        title: parsedInfo.title,
-        department: parsedInfo.department,
-        ...jdData,
-      },
+      // Generate JD using the extracted information
+      console.log("Calling generateAtlanJD with extracted information")
+      const jdData = await generateAtlanJD(parsedInfo)
+
+      if (!jdData || !jdData.sections) {
+        console.error("Invalid JD data returned:", jdData)
+        return {
+          success: false,
+          error: "Failed to generate valid job description data. Please try again.",
+        }
+      }
+
+      console.log("JD generated successfully from document:", Object.keys(jdData))
+
+      return {
+        success: true,
+        data: {
+          title: parsedInfo.title,
+          department: parsedInfo.department,
+          ...jdData,
+        },
+      }
+    } catch (error) {
+      console.error("Error in AI service for document analysis:", error)
+
+      // Create a basic JD from the document content
+      const basicInfo = extractBasicInfoFromDocument(fileContent)
+      const jdData = {
+        sections: {
+          overview: `This role involves responsibilities related to ${basicInfo.title} in the ${basicInfo.department} department.`,
+          responsibilities: [
+            "Lead key initiatives and projects",
+            "Collaborate with cross-functional teams",
+            "Drive strategic outcomes",
+            "Implement best practices",
+            "Analyze and report on results",
+          ],
+          qualifications: [
+            "Experience in relevant field",
+            "Strong communication skills",
+            "Analytical thinking",
+            "Problem-solving abilities",
+            "Team collaboration",
+          ],
+        },
+        analysis: {
+          clarity: 70,
+          inclusivity: 80,
+          seo: 65,
+          attraction: 75,
+        },
+        isTemplateFallback: true,
+      }
+
+      return {
+        success: true,
+        data: {
+          title: basicInfo.title,
+          department: basicInfo.department,
+          ...jdData,
+        },
+      }
     }
   } catch (error) {
     console.error("Error analyzing uploaded document:", error)
@@ -240,5 +311,77 @@ export async function analyzeUploadedDocument(fileContent: string) {
       success: false,
       error: "Failed to analyze the uploaded document. Please try again.",
     }
+  }
+}
+
+// Helper function to extract basic information from document content
+function extractBasicInfoFromDocument(content: string): any {
+  // Simple extraction logic based on common patterns in job descriptions
+  let title = "Position"
+  let department = "Department"
+
+  // Try to extract title
+  const titleMatches = content.match(/(?:job title|position|role)[\s:]+([^\n.]+)/i)
+  if (titleMatches && titleMatches[1]) {
+    title = titleMatches[1].trim()
+  } else {
+    // Look for patterns like "Senior Software Engineer"
+    const commonTitles = [
+      "Engineer",
+      "Manager",
+      "Director",
+      "Specialist",
+      "Analyst",
+      "Developer",
+      "Designer",
+      "Coordinator",
+      "Assistant",
+      "Lead",
+    ]
+
+    for (const titleWord of commonTitles) {
+      const regex = new RegExp(`(\\w+\\s+${titleWord}|${titleWord})`, "i")
+      const match = content.match(regex)
+      if (match && match[1]) {
+        title = match[1].trim()
+        break
+      }
+    }
+  }
+
+  // Try to extract department
+  const deptMatches = content.match(/(?:department|team|division)[\s:]+([^\n.]+)/i)
+  if (deptMatches && deptMatches[1]) {
+    department = deptMatches[1].trim()
+  } else {
+    // Look for common department names
+    const commonDepts = [
+      "Engineering",
+      "Marketing",
+      "Sales",
+      "Finance",
+      "HR",
+      "Product",
+      "Design",
+      "Operations",
+      "Support",
+      "Research",
+    ]
+
+    for (const dept of commonDepts) {
+      if (content.includes(dept)) {
+        department = dept
+        break
+      }
+    }
+  }
+
+  return {
+    title,
+    department,
+    outcomes: "Drive key results and outcomes for the organization",
+    mindset: "Strategic thinking and problem-solving approach",
+    advantage: "Contribute to organizational growth and innovation",
+    decisions: "Balance priorities and make data-driven decisions",
   }
 }

@@ -19,11 +19,21 @@ export function JDOutput({ data }: JDOutputProps) {
     )
   }
 
+  // Calculate a start date 1 month from now
+  const startDate = new Date()
+  startDate.setMonth(startDate.getMonth() + 1)
+  const formattedStartDate = startDate.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })
+
   return (
     <div className="prose max-w-none">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-atlan-primary mb-2">{title}</h1>
         <p className="text-lg text-slate-600">{department}</p>
+        <p className="text-sm text-slate-500 mt-2">
+          Engineering Hiring Manager: {department} Hiring Manager | Date of Intake:{" "}
+          {new Date().toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })} | Bi-/Weekly
+          Cadence Call: To Be Scheduled | Start Date: {formattedStartDate}
+        </p>
       </div>
 
       {/* Static Introduction */}

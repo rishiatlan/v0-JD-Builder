@@ -118,6 +118,7 @@ class AnalyticsService {
       console.log("Analytics events flushed to database", { count: events.length })
     } catch (error) {
       console.error("Error flushing analytics events:", error)
+      // Don't rethrow the error to prevent disrupting the user experience
     }
   }
 

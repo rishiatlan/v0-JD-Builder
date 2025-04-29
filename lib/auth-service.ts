@@ -1,6 +1,6 @@
 import { query } from "@/lib/db"
-import { compare, hash } from "bcrypt"
-import { createSession, destroySession } from "@/lib/session"
+import { createSession, destroySession, getSession } from "@/lib/session"
+import { hashString } from "@/lib/browser-crypto"
 
 const SALT_ROUNDS = 10
 
@@ -8,6 +8,27 @@ export interface UserProfile {
   id: string
   email: string
   full_name: string | null
+}
+
+// Simple password hashing function for browser compatibility
+async function hashPassword(password: string): Promise<string> {
+  // Generate a random salt
+  const salt = Array.from(crypto.getRandomValues(new Uint8Array(16)))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("")
+
+  // Hash the password with the salt
+  const hashWithSalt = await hashString(password + salt)
+
+  // Return the salt and hash together
+  return `${salt}:${hashWithSalt}`
+}
+
+// Simple password verification function
+async function verifyPassword(password: string, storedHash: string): Promise<boolean> {
+  const [salt, hash] = storedHash.split(":")
+  const calculatedHash = await hashString(password + salt)
+  return calculatedHash === hash
 }
 
 export class AuthService {
@@ -25,7 +46,7 @@ export class AuthService {
       }
 
       // Hash password
-      const passwordHash = await hash(password, SALT_ROUNDS)
+      const passwordHash = await hashPassword(password)
 
       // Create user
       const insertQuery = `
@@ -66,7 +87,7 @@ export class AuthService {
       const user = users[0]
 
       // Verify password
-      const isPasswordValid = await compare(password, user.password_hash)
+      const isPasswordValid = await verifyPassword(password, user.password_hash)
 
       if (!isPasswordValid) {
         return { success: false, error: "Invalid email or password" }
@@ -84,6 +105,10 @@ export class AuthService {
 
   static async signOut(): Promise<void> {
     await destroySession()
+  }
+
+  static async getCurrentUser(): Promise<UserProfile | null> {
+    return await getSession()
   }
 
   static async updateProfile(

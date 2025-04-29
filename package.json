@@ -60,11 +60,10 @@
     "zod": "^3.24.1",
     "fs": "latest",
     "path": "latest",
+    "@neondatabase/serverless": "latest",
     "mammoth": "latest",
     "pdfjs-dist": "latest",
-    "@neondatabase/serverless": "latest",
-    "jsonwebtoken": "latest",
-    "bcryptjs": "latest"
+    "docx": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

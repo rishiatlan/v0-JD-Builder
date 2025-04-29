@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -18,6 +18,23 @@ interface IntakeFormProps {
   onSubmit: (data: any) => void
   isLoading: boolean
   initialData?: any
+}
+
+// Debounce function
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState<T>(value)
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value)
+    }, delay)
+
+    return () => {
+      clearTimeout(handler)
+    }
+  }, [value, delay])
+
+  return debouncedValue
 }
 
 export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps) {
@@ -37,6 +54,12 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
   const [showPreview, setShowPreview] = useState(false)
   const { toast } = useToast()
   const [isSubmitted, setIsSubmitted] = useState(false)
+  const [lastSubmitTime, setLastSubmitTime] = useState(0)
+  const RATE_LIMIT_MS = 10000 // 10 seconds between submissions
+  const [isSubmitPending, setIsSubmitPending] = useState(false)
+
+  // Debounce the form data to prevent excessive re-renders
+  const debouncedFormData = useDebounce(formData, 300)
 
   // Apply initial data if provided
   useEffect(() => {
@@ -86,13 +109,11 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
       }
 
       setFile(selectedFile)
-      // Remove the toast notification here to prevent duplication
     }
   }
 
   const handleContentParsed = (content: string) => {
     setFileContent(content)
-    // Show a single toast notification here instead of in the DocumentParser
     toast({
       title: "File parsed successfully",
       description: `${file?.name} has been parsed and is ready for analysis.`,
@@ -108,23 +129,36 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
     })
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // Debounced submit handler
+  const debouncedSubmit = useCallback(async () => {
+    if (!isSubmitPending) return
 
-    // Prevent multiple submissions
-    if (isSubmitted || localLoading) return
+    // Check rate limiting
+    const now = Date.now()
+    if (now - lastSubmitTime < RATE_LIMIT_MS) {
+      const waitTime = Math.ceil((RATE_LIMIT_MS - (now - lastSubmitTime)) / 1000)
+      setError(`Please wait ${waitTime} seconds before submitting again to avoid overloading the AI service.`)
+      toast({
+        title: "Rate Limited",
+        description: `Please wait ${waitTime} seconds before submitting again.`,
+        variant: "destructive",
+      })
+      setIsSubmitPending(false)
+      return
+    }
 
     setError(null)
     setLocalLoading(true)
     setIsSubmitted(true)
+    setLastSubmitTime(now)
 
     try {
       if (activeTab === "questionnaire") {
-        console.log("Submitting questionnaire data:", formData)
+        console.log("Submitting questionnaire data:", debouncedFormData)
 
         // Create FormData object
         const formDataObj = new FormData()
-        Object.entries(formData).forEach(([key, value]) => {
+        Object.entries(debouncedFormData).forEach(([key, value]) => {
           formDataObj.append(key, value)
         })
 
@@ -152,12 +186,22 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
         if (result.success) {
           onSubmit(result.data)
         } else {
-          setError(result.error || "Failed to analyze the uploaded document")
-          toast({
-            title: "Error",
-            description: result.error || "Failed to analyze the uploaded document",
-            variant: "destructive",
-          })
+          // Check if the error is related to the Gemini API being overloaded
+          if (result.error?.includes("overloaded") || result.error?.includes("503")) {
+            setError("The AI service is currently experiencing high demand. Please try again in a few moments.")
+            toast({
+              title: "Service Busy",
+              description: "The AI service is currently experiencing high demand. Please try again in a few moments.",
+              variant: "destructive",
+            })
+          } else {
+            setError(result.error || "Failed to analyze the uploaded document")
+            toast({
+              title: "Error",
+              description: result.error || "Failed to analyze the uploaded document",
+              variant: "destructive",
+            })
+          }
         }
       } else {
         setError("Please select a file to upload")
@@ -177,15 +221,20 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
       })
     } finally {
       setLocalLoading(false)
-      // Don't reset isSubmitted here to prevent multiple submissions
+      setIsSubmitPending(false)
     }
-  }
+  }, [activeTab, debouncedFormData, fileContent, file, lastSubmitTime, isSubmitPending, onSubmit, toast])
 
-  const resetForm = () => {
-    setIsSubmitted(false)
-    setFile(null)
-    setFileContent(null)
-    setError(null)
+  // Set up the effect for debounced submission
+  useEffect(() => {
+    if (isSubmitPending) {
+      debouncedSubmit()
+    }
+  }, [isSubmitPending, debouncedSubmit])
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsSubmitPending(true)
   }
 
   return (
@@ -297,12 +346,12 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
               <Button
                 type="submit"
                 className="w-full bg-atlan-primary hover:bg-atlan-primary-dark"
-                disabled={isLoading || localLoading}
+                disabled={isLoading || localLoading || isSubmitPending}
               >
-                {isLoading || localLoading ? (
+                {isLoading || localLoading || isSubmitPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Analyzing with Gemini...
+                    Analyzing...
                   </>
                 ) : (
                   "Generate Atlan-Standard JD"
@@ -400,12 +449,12 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
               <Button
                 onClick={handleSubmit}
                 className="w-full bg-atlan-primary hover:bg-atlan-primary-dark"
-                disabled={!fileContent || isLoading || localLoading}
+                disabled={!fileContent || isLoading || localLoading || isSubmitPending}
               >
-                {isLoading || localLoading ? (
+                {isLoading || localLoading || isSubmitPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Analyzing with Gemini...
+                    Analyzing...
                   </>
                 ) : (
                   "Analyze Document"

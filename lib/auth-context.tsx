@@ -10,6 +10,7 @@ interface AuthState {
   user: UserSession | null
   isLoading: boolean
   isAuthenticated: boolean
+  error: string | null
 }
 
 interface AuthContextType {
@@ -18,6 +19,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, metadata?: any) => Promise<{ success: boolean; error?: string }>
   signOut: () => Promise<void>
   updateProfile: (profile: any) => Promise<{ success: boolean; error?: string }>
+  clearError: () => void
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -27,6 +29,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user: null,
     isLoading: true,
     isAuthenticated: false,
+    error: null,
   })
 
   const router = useRouter()
@@ -41,6 +44,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           user,
           isLoading: false,
           isAuthenticated: !!user,
+          error: null,
         })
       } catch (error) {
         console.error("Auth initialization error:", error)
@@ -48,6 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           user: null,
           isLoading: false,
           isAuthenticated: false,
+          error: error instanceof Error ? error.message : "Authentication initialization failed",
         })
       }
     }
@@ -55,9 +60,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     initAuth()
   }, [])
 
+  const clearError = () => {
+    setAuthState((prev) => ({ ...prev, error: null }))
+  }
+
   const handleSignIn = async (email: string, password: string) => {
     try {
-      const result = await signIn(null, new FormData(Object.entries({ email, password })))
+      const formData = new FormData()
+      formData.append("email", email)
+      formData.append("password", password)
+
+      const result = await signIn(null, formData)
 
       if (result.success) {
         const user = await getCurrentUser()
@@ -66,13 +79,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           user,
           isLoading: false,
           isAuthenticated: !!user,
+          error: null,
         })
+      } else {
+        setAuthState((prev) => ({
+          ...prev,
+          error: result.error || "Sign in failed",
+        }))
       }
 
       return result
     } catch (error) {
       console.error("Sign in error:", error)
-      return { success: false, error: error.message || "Failed to sign in" }
+      const errorMessage = error instanceof Error ? error.message : "Failed to sign in"
+      setAuthState((prev) => ({
+        ...prev,
+        error: errorMessage,
+      }))
+      return { success: false, error: errorMessage }
     }
   }
 
@@ -94,13 +118,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           user,
           isLoading: false,
           isAuthenticated: !!user,
+          error: null,
         })
+      } else {
+        setAuthState((prev) => ({
+          ...prev,
+          error: result.error || "Sign up failed",
+        }))
       }
 
       return result
     } catch (error) {
       console.error("Sign up error:", error)
-      return { success: false, error: error.message || "Failed to sign up" }
+      const errorMessage = error instanceof Error ? error.message : "Failed to sign up"
+      setAuthState((prev) => ({
+        ...prev,
+        error: errorMessage,
+      }))
+      return { success: false, error: errorMessage }
     }
   }
 
@@ -112,11 +147,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         user: null,
         isLoading: false,
         isAuthenticated: false,
+        error: null,
       })
 
       router.push("/")
     } catch (error) {
       console.error("Sign out error:", error)
+      setAuthState((prev) => ({
+        ...prev,
+        error: error instanceof Error ? error.message : "Sign out failed",
+      }))
     }
   }
 
@@ -135,13 +175,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAuthState((prev) => ({
           ...prev,
           user,
+          error: null,
+        }))
+      } else {
+        setAuthState((prev) => ({
+          ...prev,
+          error: result.error || "Profile update failed",
         }))
       }
 
       return result
     } catch (error) {
       console.error("Update profile error:", error)
-      return { success: false, error: error.message || "Failed to update profile" }
+      const errorMessage = error instanceof Error ? error.message : "Failed to update profile"
+      setAuthState((prev) => ({
+        ...prev,
+        error: errorMessage,
+      }))
+      return { success: false, error: errorMessage }
     }
   }
 
@@ -151,6 +202,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signUp: handleSignUp,
     signOut: handleSignOut,
     updateProfile: handleUpdateProfile,
+    clearError,
   }
 
   return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>
