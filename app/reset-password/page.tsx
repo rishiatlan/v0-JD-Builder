@@ -4,16 +4,15 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
-import { EnhancedHeader } from "@/components/enhanced-header"
-import { EnhancedFooter } from "@/components/enhanced-footer"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/components/ui/use-toast"
-import { confirmPasswordReset } from "@/app/actions/auth-actions"
-import { Loader2, Lock, CheckCircle, X, AlertCircle, ArrowLeft } from "lucide-react"
+import { Loader2, Lock, CheckCircle, X, AlertCircle } from "lucide-react"
 import { motion } from "framer-motion"
+import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
+import { AtlanLogo } from "@/components/atlan-logo"
 
 export default function ResetPasswordPage() {
   const [password, setPassword] = useState("")
@@ -29,47 +28,42 @@ export default function ResetPasswordPage() {
     special: false,
   })
   const [error, setError] = useState<string | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [hasValidSession, setHasValidSession] = useState(false)
   const { toast } = useToast()
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const [token, setToken] = useState<string | null>(null)
+  const supabase = createClientComponentClient()
 
   useEffect(() => {
-    // Supabase sends the token as a hash parameter (#access_token=...)
-    // We need to check both the searchParams and the hash
-    const urlToken = searchParams.get("token")
+    async function checkSession() {
+      setIsLoading(true)
 
-    // Check if we have a hash in the URL (Supabase auth redirect)
-    if (typeof window !== "undefined") {
-      const hash = window.location.hash
-      if (hash && hash.includes("access_token=")) {
-        // Extract the token from the hash
-        const hashParams = new URLSearchParams(hash.substring(1))
-        const accessToken = hashParams.get("access_token")
-        if (accessToken) {
-          setToken(accessToken)
-          return
+      try {
+        // Check if we have a valid session from the auth callback
+        const { data, error } = await supabase.auth.getSession()
+
+        if (error) {
+          console.error("Session error:", error)
+          setError("Unable to verify your session. Please try requesting a new password reset link.")
+          setHasValidSession(false)
+        } else if (data.session) {
+          // We have a valid session from the auth callback
+          setHasValidSession(true)
+        } else {
+          setError("No active session found. Please request a new password reset link.")
+          setHasValidSession(false)
         }
+      } catch (err) {
+        console.error("Error checking session:", err)
+        setError("An unexpected error occurred. Please try again.")
+        setHasValidSession(false)
+      } finally {
+        setIsLoading(false)
       }
     }
 
-    if (urlToken) {
-      setToken(urlToken)
-    } else {
-      setError("The password reset link is invalid or has expired.")
-    }
-  }, [searchParams])
-
-  useEffect(() => {
-    if (!token && !error) {
-      setError("The password reset link is invalid or has expired.")
-      toast({
-        title: "Invalid reset link",
-        description: "The password reset link is invalid or has expired.",
-        variant: "destructive",
-      })
-    }
-  }, [token, toast, error])
+    checkSession()
+  }, [supabase.auth])
 
   useEffect(() => {
     // Check password requirements
@@ -110,37 +104,34 @@ export default function ResetPasswordPage() {
     setIsSubmitting(true)
 
     try {
-      if (!token) {
-        throw new Error("Reset token is missing")
+      // Use the Supabase client to update the password directly
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: password,
+      })
+
+      if (updateError) {
+        throw updateError
       }
 
-      const { success, error } = await confirmPasswordReset(token, password)
+      setIsSubmitted(true)
+      toast({
+        title: "Success",
+        description: "Your password has been reset successfully.",
+      })
 
-      if (success) {
-        setIsSubmitted(true)
-        toast({
-          title: "Success",
-          description: "Your password has been reset successfully.",
-        })
+      // Sign out after successful password reset
+      await supabase.auth.signOut()
 
-        // Redirect to login after 3 seconds
-        setTimeout(() => {
-          router.push("/login")
-        }, 3000)
-      } else {
-        setError(error || "Failed to reset password. The link may have expired.")
-        toast({
-          title: "Error",
-          description: error || "Failed to reset password. The link may have expired.",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
+      // Redirect to login after 3 seconds
+      setTimeout(() => {
+        router.push("/login")
+      }, 3000)
+    } catch (error: any) {
       console.error("Password reset error:", error)
-      setError("An unexpected error occurred. Please try again.")
+      setError(error.message || "An unexpected error occurred. Please try again.")
       toast({
         title: "Error",
-        description: "An unexpected error occurred. Please try again.",
+        description: error.message || "An unexpected error occurred. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -162,202 +153,193 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col">
-      <EnhancedHeader />
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 px-4">
+      <div className="mb-8">
+        <AtlanLogo />
+      </div>
 
-      <main className="flex-grow flex items-center justify-center py-12 bg-slate-50">
-        <div className="container mx-auto px-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="max-w-md mx-auto"
-          >
-            <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold mb-2">Set New Password</h1>
-              <p className="text-slate-600">Create a new secure password for your account</p>
+      <div className="w-full max-w-md bg-white rounded-lg shadow-md p-8">
+        <h1 className="text-2xl font-bold text-center mb-6">Set New Password</h1>
+
+        {isLoading ? (
+          <div className="flex justify-center items-center py-8">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : !hasValidSession && !isSubmitted ? (
+          <div className="space-y-6">
+            <div className="flex flex-col items-center justify-center py-4">
+              <div className="h-16 w-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
+                <AlertCircle className="h-8 w-8 text-red-600" />
+              </div>
+              <h3 className="text-xl font-semibold mb-2">Invalid Reset Link</h3>
+              <p className="text-center text-slate-600">
+                {error || "The password reset link is invalid or has expired."}
+              </p>
             </div>
 
-            <div className="bg-white rounded-xl shadow-soft p-8">
-              {error && !token && (
-                <div className="space-y-6">
-                  <div className="flex flex-col items-center justify-center py-4">
-                    <div className="h-16 w-16 bg-red-100 rounded-full flex items-center justify-center mb-4">
-                      <AlertCircle className="h-8 w-8 text-red-600" />
-                    </div>
-                    <h3 className="text-xl font-semibold mb-2">Invalid Reset Link</h3>
-                    <p className="text-center text-slate-600">The password reset link is invalid or has expired.</p>
-                  </div>
+            <Button
+              className="w-full bg-primary hover:bg-primary/90 text-white"
+              onClick={() => router.push("/forgot-password")}
+            >
+              Request New Reset Link
+            </Button>
+          </div>
+        ) : hasValidSession && !isSubmitted ? (
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-3 rounded-md bg-red-50 text-red-700 text-sm flex items-start"
+              >
+                <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0" />
+                <span>{error}</span>
+              </motion.div>
+            )}
 
-                  <Button
-                    className="w-full bg-primary hover:bg-primary/90 text-white"
-                    onClick={() => router.push("/forgot-password")}
-                  >
-                    Request New Reset Link
-                  </Button>
+            <div className="space-y-2">
+              <Label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                New Password
+              </Label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+                  <Lock className="h-5 w-5" />
                 </div>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="pl-10"
+                  required
+                />
+              </div>
+
+              {password && (
+                <>
+                  <div className="flex items-center gap-2 mt-2">
+                    <div className={`h-2 flex-1 rounded-full ${getStrengthColor()}`}></div>
+                    <span className="text-xs font-medium capitalize">{passwordStrength || "weak"}</span>
+                  </div>
+                  <div className="mt-3 space-y-1 bg-slate-50 p-3 rounded-md">
+                    <p className="text-xs font-medium">Password requirements:</p>
+                    <ul className="text-xs space-y-1">
+                      <li className="flex items-center">
+                        {passwordRequirements.length ? (
+                          <CheckCircle className="h-3 w-3 text-green-500 mr-1" />
+                        ) : (
+                          <X className="h-3 w-3 text-red-500 mr-1" />
+                        )}
+                        At least 8 characters
+                      </li>
+                      <li className="flex items-center">
+                        {passwordRequirements.uppercase ? (
+                          <CheckCircle className="h-3 w-3 text-green-500 mr-1" />
+                        ) : (
+                          <X className="h-3 w-3 text-red-500 mr-1" />
+                        )}
+                        At least one uppercase letter
+                      </li>
+                      <li className="flex items-center">
+                        {passwordRequirements.lowercase ? (
+                          <CheckCircle className="h-3 w-3 text-green-500 mr-1" />
+                        ) : (
+                          <X className="h-3 w-3 text-red-500 mr-1" />
+                        )}
+                        At least one lowercase letter
+                      </li>
+                      <li className="flex items-center">
+                        {passwordRequirements.number ? (
+                          <CheckCircle className="h-3 w-3 text-green-500 mr-1" />
+                        ) : (
+                          <X className="h-3 w-3 text-red-500 mr-1" />
+                        )}
+                        At least one number
+                      </li>
+                      <li className="flex items-center">
+                        {passwordRequirements.special ? (
+                          <CheckCircle className="h-3 w-3 text-green-500 mr-1" />
+                        ) : (
+                          <X className="h-3 w-3 text-red-500 mr-1" />
+                        )}
+                        At least one special character
+                      </li>
+                    </ul>
+                  </div>
+                </>
               )}
+            </div>
 
-              {token && !isSubmitted && (
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  {error && (
-                    <motion.div
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      className="p-3 rounded-md bg-red-50 text-red-700 text-sm flex items-start"
-                    >
-                      <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0" />
-                      <span>{error}</span>
-                    </motion.div>
-                  )}
-
-                  <div className="space-y-2">
-                    <Label htmlFor="password" className="text-sm font-medium">
-                      New Password
-                    </Label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
-                        <Lock className="h-5 w-5" />
-                      </div>
-                      <Input
-                        id="password"
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="pl-10"
-                        required
-                      />
-                    </div>
-
-                    {password && (
-                      <>
-                        <div className="flex items-center gap-2 mt-2">
-                          <div className={`h-2 flex-1 rounded-full ${getStrengthColor()}`}></div>
-                          <span className="text-xs font-medium capitalize">{passwordStrength || "weak"}</span>
-                        </div>
-                        <div className="mt-3 space-y-1 bg-slate-50 p-3 rounded-md">
-                          <p className="text-xs font-medium">Password requirements:</p>
-                          <ul className="text-xs space-y-1">
-                            <li className="flex items-center">
-                              {passwordRequirements.length ? (
-                                <CheckCircle className="h-3 w-3 text-green-500 mr-1" />
-                              ) : (
-                                <X className="h-3 w-3 text-red-500 mr-1" />
-                              )}
-                              At least 8 characters
-                            </li>
-                            <li className="flex items-center">
-                              {passwordRequirements.uppercase ? (
-                                <CheckCircle className="h-3 w-3 text-green-500 mr-1" />
-                              ) : (
-                                <X className="h-3 w-3 text-red-500 mr-1" />
-                              )}
-                              At least one uppercase letter
-                            </li>
-                            <li className="flex items-center">
-                              {passwordRequirements.lowercase ? (
-                                <CheckCircle className="h-3 w-3 text-green-500 mr-1" />
-                              ) : (
-                                <X className="h-3 w-3 text-red-500 mr-1" />
-                              )}
-                              At least one lowercase letter
-                            </li>
-                            <li className="flex items-center">
-                              {passwordRequirements.number ? (
-                                <CheckCircle className="h-3 w-3 text-green-500 mr-1" />
-                              ) : (
-                                <X className="h-3 w-3 text-red-500 mr-1" />
-                              )}
-                              At least one number
-                            </li>
-                            <li className="flex items-center">
-                              {passwordRequirements.special ? (
-                                <CheckCircle className="h-3 w-3 text-green-500 mr-1" />
-                              ) : (
-                                <X className="h-3 w-3 text-red-500 mr-1" />
-                              )}
-                              At least one special character
-                            </li>
-                          </ul>
-                        </div>
-                      </>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPassword" className="text-sm font-medium">
-                      Confirm Password
-                    </Label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
-                        <Lock className="h-5 w-5" />
-                      </div>
-                      <Input
-                        id="confirmPassword"
-                        type="password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="pl-10"
-                        required
-                      />
-                    </div>
-
-                    {password && confirmPassword && password !== confirmPassword && (
-                      <p className="text-xs text-red-500 mt-1">Passwords don't match</p>
-                    )}
-                  </div>
-
-                  <Button
-                    type="submit"
-                    className="w-full bg-primary hover:bg-primary/90 text-white"
-                    disabled={isSubmitting || password !== confirmPassword || passwordStrength === "weak"}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Resetting Password...
-                      </>
-                    ) : (
-                      "Reset Password"
-                    )}
-                  </Button>
-                </form>
-              )}
-
-              {isSubmitted && (
-                <div className="space-y-6">
-                  <div className="flex flex-col items-center justify-center py-4">
-                    <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                      <CheckCircle className="h-8 w-8 text-green-600" />
-                    </div>
-                    <h3 className="text-xl font-semibold mb-2">Password Reset Successful</h3>
-                    <p className="text-center text-slate-600">
-                      Your password has been reset successfully. You will be redirected to the login page in a few
-                      seconds.
-                    </p>
-                  </div>
-
-                  <Button
-                    className="w-full bg-primary hover:bg-primary/90 text-white"
-                    onClick={() => router.push("/login")}
-                  >
-                    Go to Login
-                  </Button>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 mb-1">
+                Confirm Password
+              </Label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-400">
+                  <Lock className="h-5 w-5" />
                 </div>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="pl-10"
+                  required
+                />
+              </div>
+
+              {password && confirmPassword && password !== confirmPassword && (
+                <p className="text-xs text-red-500 mt-1">Passwords don't match</p>
               )}
             </div>
 
-            <div className="text-center mt-6">
-              <Link href="/login" className="inline-flex items-center text-primary hover:underline">
-                <ArrowLeft className="h-4 w-4 mr-1" />
-                Back to login
-              </Link>
-            </div>
-          </motion.div>
-        </div>
-      </main>
+            <Button
+              type="submit"
+              className="w-full bg-primary hover:bg-primary/90 text-white"
+              disabled={isSubmitting || password !== confirmPassword || passwordStrength === "weak"}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Resetting Password...
+                </>
+              ) : (
+                "Reset Password"
+              )}
+            </Button>
+          </form>
+        ) : (
+          isSubmitted && (
+            <div className="space-y-6">
+              <div className="flex flex-col items-center justify-center py-4">
+                <div className="h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                  <CheckCircle className="h-8 w-8 text-green-600" />
+                </div>
+                <h3 className="text-xl font-semibold mb-2">Password Reset Successful</h3>
+                <p className="text-center text-slate-600">
+                  Your password has been reset successfully. You will be redirected to the login page in a few seconds.
+                </p>
+              </div>
 
-      <EnhancedFooter />
+              <Button
+                className="w-full bg-primary hover:bg-primary/90 text-white"
+                onClick={() => router.push("/login")}
+              >
+                Go to Login
+              </Button>
+            </div>
+          )
+        )}
+      </div>
+
+      <div className="mt-6 text-center">
+        <p className="text-sm text-gray-600">
+          Remember your password?{" "}
+          <Link href="/login" className="text-blue-600 hover:text-blue-800 font-medium">
+            Sign in
+          </Link>
+        </p>
+      </div>
     </div>
   )
 }

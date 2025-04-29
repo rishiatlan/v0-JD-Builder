@@ -6,6 +6,7 @@ import type { NextRequest } from "next/server"
 export async function GET(request: NextRequest) {
   const requestUrl = new URL(request.url)
   const code = requestUrl.searchParams.get("code")
+  const type = requestUrl.searchParams.get("type")
 
   if (code) {
     const cookieStore = cookies()
@@ -13,8 +14,13 @@ export async function GET(request: NextRequest) {
 
     // Exchange the code for a session
     await supabase.auth.exchangeCodeForSession(code)
+
+    // If this is a password reset, redirect to the reset-password page
+    if (type === "recovery") {
+      return NextResponse.redirect(`${requestUrl.origin}/reset-password?recovery=true`)
+    }
   }
 
-  // URL to redirect to after sign in process completes
-  return NextResponse.redirect(`${requestUrl.origin}/reset-password`)
+  // For other auth flows, redirect to the home page
+  return NextResponse.redirect(`${requestUrl.origin}/`)
 }

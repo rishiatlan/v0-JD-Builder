@@ -139,11 +139,11 @@ export async function resetPassword(email: string) {
     },
   )
 
-  // Make sure we have the correct app URL with the proper path
-  const resetUrl = `${process.env.NEXT_PUBLIC_APP_URL}/reset-password`
+  // Use the auth callback route with type=recovery
+  const callbackUrl = `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback?type=recovery`
 
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: resetUrl,
+    redirectTo: callbackUrl,
   })
 
   if (error) {
@@ -153,7 +153,7 @@ export async function resetPassword(email: string) {
   return { success: true }
 }
 
-export async function confirmPasswordReset(token: string, newPassword: string) {
+export async function confirmPasswordReset(newPassword: string) {
   const cookieStore = cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -184,7 +184,6 @@ export async function confirmPasswordReset(token: string, newPassword: string) {
   return { success: true }
 }
 
-// Add the missing exports
 export async function getCurrentUser() {
   const cookieStore = cookies()
   const supabase = createServerClient(
