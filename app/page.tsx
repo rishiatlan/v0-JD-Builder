@@ -1,6 +1,7 @@
 import { JDAnalyzer } from "@/components/jd-analyzer"
 import { AtlanHeader } from "@/components/atlan-header"
 import { AtlanFooter } from "@/components/atlan-footer"
+import { Suspense } from "react"
 
 export default function Home() {
   return (
@@ -11,7 +12,9 @@ export default function Home() {
         <p className="text-center text-slate-600 max-w-3xl mx-auto mb-12">
           Create world-class job descriptions that follow Atlan's standards of excellence.
         </p>
-        <JDAnalyzer />
+        <Suspense fallback={<div className="text-center p-8">Loading JD Builder...</div>}>
+          <JDAnalyzer />
+        </Suspense>
       </main>
       <AtlanFooter />
     </div>

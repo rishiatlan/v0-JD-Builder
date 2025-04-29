@@ -4,6 +4,9 @@ import { LoginForm } from "@/components/auth/login-form"
 import { getSession } from "@/lib/session"
 import { redirect } from "next/navigation"
 
+// Mark this page as dynamic since it uses cookies
+export const dynamic = "force-dynamic"
+
 export default async function LoginPage() {
   // Check if user is already logged in
   const session = await getSession()

@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import type React from "react"
+
+import { useState, useEffect, useCallback, Suspense } from "react"
 import { checkJDForBias } from "@/app/actions"
 import { useToast } from "@/components/ui/use-toast"
 import { useSearchParams } from "next/navigation"
@@ -20,6 +22,11 @@ import { Download, Save } from "lucide-react"
 import { jdToHtml, jdToText } from "@/lib/pdf-utils"
 import { generateWordDocument } from "@/lib/docx-utils"
 
+const SearchParamsComponent = ({ children }: { children: (searchParams: URLSearchParams) => React.ReactNode }) => {
+  const searchParams = useSearchParams()
+  return <>{children(searchParams)}</>
+}
+
 export function JDAnalyzer() {
   const [activeStep, setActiveStep] = useState<number>(1)
   const [jdData, setJdData] = useState<any>(null)
@@ -29,12 +36,12 @@ export function JDAnalyzer() {
   const [showEmailDialog, setShowEmailDialog] = useState<boolean>(false)
   const [userEmail, setUserEmail] = useState<string>("")
   const { toast } = useToast()
-  const searchParams = useSearchParams()
   const { authState } = useAuth()
   const [exportFormat, setExportFormat] = useState<"txt" | "pdf" | "docx">("txt")
+  const searchParams = useSearchParams()
 
   // Check for template parameter
-  useEffect(() => {
+  const handleSearchParams = useCallback(() => {
     if (!searchParams) return
 
     const template = searchParams.get("template")
@@ -42,7 +49,7 @@ export function JDAnalyzer() {
       // In a real app, we would fetch template data from an API
       loadTemplate(template)
     }
-  }, [searchParams])
+  }, [searchParams, toast])
 
   // Set user email if authenticated
   useEffect(() => {
@@ -50,6 +57,10 @@ export function JDAnalyzer() {
       setUserEmail(authState.user.email)
     }
   }, [authState.isAuthenticated, authState.user])
+
+  useEffect(() => {
+    handleSearchParams()
+  }, [handleSearchParams])
 
   const loadTemplate = async (templateId: string) => {
     try {
@@ -430,7 +441,13 @@ export function JDAnalyzer() {
           </div>
         </div>
 
-        {renderStep()}
+        <Suspense fallback={<div>Loading...</div>}>
+          <SearchParamsComponent>
+            {(searchParams) => {
+              return <>{renderStep()}</>
+            }}
+          </SearchParamsComponent>
+        </Suspense>
 
         {/* Email Dialog */}
         <Dialog open={showEmailDialog} onOpenChange={setShowEmailDialog}>

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic"
+
 import { Suspense } from "react"
 import { AtlanHeader } from "@/components/atlan-header"
 import { AtlanFooter } from "@/components/atlan-footer"

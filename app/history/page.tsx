@@ -14,6 +14,9 @@ import Link from "next/link"
 import { formatDistanceToNow } from "date-fns"
 import { ProtectedRoute } from "@/components/protected-route"
 
+// Add the dynamic export at the top of the file
+export const dynamic = "force-dynamic"
+
 export default function HistoryPage() {
   const [activeTab, setActiveTab] = useState<string>("my-jds")
   const [myJDs, setMyJDs] = useState<any[]>([])
