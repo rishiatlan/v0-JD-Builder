@@ -73,7 +73,8 @@ class DocumentCacheService {
   public getDocumentByFilename(filename: string): CachedDocument | null {
     try {
       const cache = this.getCache()
-      const document = cache.find((doc) => doc.filename === filename)
+      // Use a more robust comparison that ignores case sensitivity
+      const document = cache.find((doc) => doc.filename.toLowerCase() === filename.toLowerCase())
 
       if (!document) return null
 

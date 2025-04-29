@@ -36,6 +36,7 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
   const [error, setError] = useState<string | null>(null)
   const [showPreview, setShowPreview] = useState(false)
   const { toast } = useToast()
+  const [isSubmitted, setIsSubmitted] = useState(false)
 
   // Apply initial data if provided
   useEffect(() => {
@@ -85,15 +86,13 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
       }
 
       setFile(selectedFile)
-      toast({
-        title: "File selected",
-        description: `${selectedFile.name} has been selected. Parsing will begin automatically.`,
-      })
+      // Remove the toast notification here to prevent duplication
     }
   }
 
   const handleContentParsed = (content: string) => {
     setFileContent(content)
+    // Show a single toast notification here instead of in the DocumentParser
     toast({
       title: "File parsed successfully",
       description: `${file?.name} has been parsed and is ready for analysis.`,
@@ -111,8 +110,13 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    // Prevent multiple submissions
+    if (isSubmitted || localLoading) return
+
     setError(null)
     setLocalLoading(true)
+    setIsSubmitted(true)
 
     try {
       if (activeTab === "questionnaire") {
@@ -173,7 +177,15 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
       })
     } finally {
       setLocalLoading(false)
+      // Don't reset isSubmitted here to prevent multiple submissions
     }
+  }
+
+  const resetForm = () => {
+    setIsSubmitted(false)
+    setFile(null)
+    setFileContent(null)
+    setError(null)
   }
 
   return (

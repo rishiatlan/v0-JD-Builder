@@ -23,14 +23,19 @@ export function DocumentParser({ file, onContentParsed, onError }: DocumentParse
   const [status, setStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
   const [errorDetails, setErrorDetails] = useState<string | null>(null)
   const { toast } = useToast()
+  const [isProcessed, setIsProcessed] = useState(false)
 
   // Memoize the parse function to avoid recreating it on each render
   const parseDocument = useCallback(
     async (fileToProcess: File) => {
+      // If we've already processed this file, don't do it again
+      if (isProcessed) return
+
       setIsLoading(true)
       setStatus("loading")
       setProgress(5)
       setErrorDetails(null)
+      setIsProcessed(true) // Mark as processed
 
       try {
         // Check if we already have this document in cache
@@ -50,6 +55,7 @@ export function DocumentParser({ file, onContentParsed, onError }: DocumentParse
             setStatus("success")
             setIsLoading(false)
             onContentParsed(cachedDocument.content)
+            // Remove toast notification from here - we'll handle it at a higher level
           }, 300) // Small delay for UX
 
           return
@@ -84,6 +90,7 @@ export function DocumentParser({ file, onContentParsed, onError }: DocumentParse
         setProgress(100)
         setStatus("success")
         onContentParsed(content)
+        // Remove toast notification from here - we'll handle it at a higher level
       } catch (error) {
         console.error("Error parsing document:", error)
         const errorMessage = error instanceof Error ? error.message : "Failed to parse document"
@@ -100,7 +107,7 @@ export function DocumentParser({ file, onContentParsed, onError }: DocumentParse
         setIsLoading(false)
       }
     },
-    [onContentParsed, onError],
+    [onContentParsed, onError, isProcessed],
   )
 
   // Parse text files using FileReader
@@ -232,6 +239,7 @@ export function DocumentParser({ file, onContentParsed, onError }: DocumentParse
   // Effect to trigger parsing when file changes
   useEffect(() => {
     if (file) {
+      setIsProcessed(false) // Reset the processed flag for new files
       parseDocument(file)
 
       analytics.track("document_upload", {

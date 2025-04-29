@@ -14,7 +14,7 @@ serve(async (req) => {
   }
 
   try {
-    const { errorId, errorMessage, errorStack, context, recipients } = await req.json()
+    const { errorId, errorMessage, errorStack, context, userEmail, recipients } = await req.json()
 
     // Create SMTP client
     const client = new SmtpClient()

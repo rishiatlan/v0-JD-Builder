@@ -73,6 +73,45 @@ Atlan JD Builder is a powerful tool designed to help create world-class job desc
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser to see the application.
 
+### Deployment Notes
+
+When deploying to Vercel or other platforms, ensure that:
+
+1. All dependencies in package.json are properly formatted as package names, not URLs
+2. The project uses the correct Node.js version (16.x or higher)
+3. Environment variables are properly set in the deployment platform
+
+### Troubleshooting Deployment Issues
+
+If you encounter the following error during deployment:
+\`\`\`
+ERR_PNPM_FETCH_404  GET https://registry.npmjs.org/https%3A: Not Found - 404
+\`\`\`
+
+This typically indicates an issue with the package.json file. Ensure that:
+
+1. All dependencies are specified as package names, not URLs
+2. There are no typos in package names
+3. All packages exist in the npm registry
+4. No import statements are using URLs as package names
+5. Check for any hidden dependencies in configuration files
+
+For Vercel deployments specifically:
+1. Make sure the Node.js version is set correctly (16.x or higher)
+2. Verify all environment variables are properly set in the Vercel dashboard
+3. Consider using the Vercel CLI to debug deployment issues locally
+4. Check the build logs for any specific package that's causing the error
+
+If the issue persists:
+1. Try clearing the Vercel cache and redeploying
+2. Consider using npm instead of pnpm for the installation
+3. Create a fresh package-lock.json file locally and commit it
+
+For Supabase Edge Functions, make sure:
+1. All imports use the correct Deno URL format
+2. Environment variables are properly set in the Supabase dashboard
+3. The function has the necessary permissions
+
 ## Usage Guide
 
 ### Creating a New JD
