@@ -4,28 +4,30 @@ import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs"
 
 export async function middleware(request: NextRequest) {
   try {
-    // Create a Supabase client configured to use cookies
+    const { pathname } = request.nextUrl
+
+    // These paths should always be accessible without authentication
+    const publicPaths = ["/login", "/auth/callback", "/api/auth/callback", "/auth/debug"]
+
+    // Check if the current path is public
+    const isPublicPath = publicPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`))
+
+    // Also exclude static files and API routes
+    const isExcludedPath = pathname.startsWith("/_next") || pathname.startsWith("/api/") || pathname.includes(".")
+
+    // Create a response to modify
     const res = NextResponse.next()
+
+    // Create a Supabase client
     const supabase = createMiddlewareClient({ req: request, res })
 
-    // Refresh session if expired
+    // Refresh the session if it exists
     const {
       data: { session },
     } = await supabase.auth.getSession()
 
-    // Get the pathname
-    const { pathname } = request.nextUrl
-
-    // Check if the pathname is excluded from authentication
-    const isAuthPath =
-      pathname === "/login" ||
-      pathname.startsWith("/auth/callback") ||
-      pathname.startsWith("/_next") ||
-      pathname.startsWith("/api/auth") ||
-      pathname.includes(".")
-
-    // If it's not an auth path, check for authentication
-    if (!isAuthPath && !session) {
+    // If the path requires authentication and there's no session, redirect to login
+    if (!isPublicPath && !isExcludedPath && !session) {
       const url = new URL("/login", request.url)
       url.searchParams.set("redirect", pathname)
       return NextResponse.redirect(url)
@@ -39,7 +41,6 @@ export async function middleware(request: NextRequest) {
   }
 }
 
-// See "Matching Paths" below to learn more
 export const config = {
   matcher: [
     /*

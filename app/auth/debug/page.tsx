@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { createClientComponentClient } from "@supabase/auth-helpers-nextjs"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -10,6 +10,7 @@ export default function AuthDebugPage() {
   const [loading, setLoading] = useState(true)
   const [sessionInfo, setSessionInfo] = useState<any>(null)
   const [userInfo, setUserInfo] = useState<any>(null)
+  const [cookies, setCookies] = useState<string>("")
   const [error, setError] = useState<string | null>(null)
   const supabase = createClientComponentClient()
 
@@ -39,6 +40,9 @@ export default function AuthDebugPage() {
       } else {
         setUserInfo(null)
       }
+
+      // Get cookies (for debugging)
+      setCookies(document.cookie)
     } catch (err: any) {
       console.error("Auth debug error:", err)
       setError(err.message || "Failed to fetch authentication information")
@@ -104,6 +108,17 @@ export default function AuthDebugPage() {
             ) : (
               <p className="text-gray-500">No authenticated user found</p>
             )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Cookies</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre className="bg-gray-100 p-4 rounded-md overflow-auto text-xs">{cookies || "No cookies found"}</pre>
           </CardContent>
         </Card>
       </div>
