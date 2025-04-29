@@ -6,6 +6,7 @@ import { AppContextProvider } from "@/lib/app-context"
 import { AuthProvider } from "@/lib/auth-context"
 import { Toaster } from "@/components/ui/toaster"
 import { SupabaseAuthListener } from "@/components/supabase-auth-listener"
+import { SupabaseDebug } from "@/components/supabase-debug"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -52,6 +53,7 @@ export default function RootLayout({
             {children}
             <Toaster />
             <SupabaseAuthListener />
+            {process.env.NODE_ENV === "development" && <SupabaseDebug />}
           </AppContextProvider>
         </AuthProvider>
       </body>

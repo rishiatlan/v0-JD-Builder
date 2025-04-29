@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(`${requestUrl.origin}/login?error=missing_code`)
     }
 
-    // Create a Supabase client with cookie storage
+    // Create a Supabase client with cookie storage - we need to use route handler client here
     const cookieStore = cookies()
     const supabase = createRouteHandlerClient({ cookies: () => cookieStore })
 
@@ -34,17 +34,8 @@ export async function GET(request: NextRequest) {
 
     console.log("Auth callback: Session established for", data.session.user.email)
 
-    // Set a cookie to indicate successful authentication
-    const response = NextResponse.redirect(`${requestUrl.origin}/auth/callback?code=${code}`)
-    response.cookies.set("auth_success", "true", {
-      httpOnly: true,
-      maxAge: 60, // 1 minute
-      path: "/",
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-    })
-
-    return response
+    // Redirect to the client-side callback page to handle the session
+    return NextResponse.redirect(`${requestUrl.origin}/auth/callback?code=${code}`)
   } catch (error) {
     console.error("Auth callback exception:", error)
     const errorMessage = error instanceof Error ? error.message : "Unknown error"

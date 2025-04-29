@@ -7,13 +7,18 @@ export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl
 
     // These paths should always be accessible without authentication
-    const publicPaths = ["/login", "/auth/callback", "/api/auth/callback", "/auth/debug"]
+    const publicPaths = ["/login", "/auth/callback"]
 
     // Check if the current path is public
     const isPublicPath = publicPaths.some((path) => pathname === path || pathname.startsWith(`${path}/`))
 
     // Also exclude static files and API routes
-    const isExcludedPath = pathname.startsWith("/_next") || pathname.includes(".") || pathname.startsWith("/api/")
+    const isExcludedPath = pathname.startsWith("/_next") || pathname.startsWith("/api/") || pathname.includes(".")
+
+    // If it's a public path or excluded path, allow access
+    if (isPublicPath || isExcludedPath) {
+      return NextResponse.next()
+    }
 
     // Create a response to modify
     const res = NextResponse.next()
@@ -26,13 +31,8 @@ export async function middleware(request: NextRequest) {
       data: { session },
     } = await supabase.auth.getSession()
 
-    // Log for debugging
-    console.log(
-      `Middleware: Path ${pathname}, Public: ${isPublicPath}, Excluded: ${isExcludedPath}, Session: ${session ? "exists" : "none"}`,
-    )
-
-    // If the path requires authentication and there's no session, redirect to login
-    if (!isPublicPath && !isExcludedPath && !session) {
+    // If no session, redirect to login
+    if (!session) {
       console.log(`Middleware: Redirecting unauthenticated request from ${pathname} to login`)
       const url = new URL("/login", request.url)
       url.searchParams.set("redirect", pathname)

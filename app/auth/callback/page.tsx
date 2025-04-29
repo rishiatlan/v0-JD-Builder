@@ -6,53 +6,44 @@ import { Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase-client"
 
 export default function AuthCallbackPage() {
-  const [error, setError] = useState<string | null>(null)
-  const [debugInfo, setDebugInfo] = useState<string | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
+  const [error, setError] = useState<string | null>(null)
+  const [isProcessing, setIsProcessing] = useState(true)
 
   useEffect(() => {
-    const handleCallback = async () => {
-      try {
-        // Check for code in query string (from Supabase auth redirect)
-        const code = searchParams.get("code")
+    async function handleAuth() {
+      const code = searchParams.get("code")
 
-        if (!code) {
-          setError("Missing authentication code. Please try again.")
-          setTimeout(() => router.push("/login"), 3000)
-          return
-        }
-
-        setDebugInfo("Processing authentication...")
+      if (code) {
         console.log("Auth callback: Processing code")
+        try {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
-        // Exchange the code for a session
-        const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
-
-        if (exchangeError) {
-          console.error("Auth callback: Code exchange failed", exchangeError)
-          throw exchangeError
+          if (error) {
+            console.error("Error exchanging code:", error.message)
+            setError(error.message)
+            setTimeout(() => router.push("/login?error=auth_failed"), 3000)
+          } else {
+            console.log("Session successfully established for:", data.session?.user.email)
+            // Force a full page reload to ensure the session is recognized everywhere
+            window.location.href = "/"
+          }
+        } catch (err: any) {
+          console.error("Auth callback error:", err)
+          setError(err.message || "Authentication failed")
+          setTimeout(() => router.push("/login?error=auth_exception"), 3000)
         }
-
-        if (!data.session) {
-          console.error("Auth callback: No session created")
-          throw new Error("Failed to establish session")
-        }
-
-        console.log("Auth callback: Session established for", data.session.user.email)
-        setDebugInfo(`Authentication successful for ${data.session.user.email}`)
-
-        // Force a full page reload to ensure the session is recognized everywhere
-        window.location.href = "/"
-      } catch (err: any) {
-        console.error("Auth callback error:", err)
-        setError(err.message || "Authentication failed")
-        setTimeout(() => router.push("/login"), 3000)
+      } else {
+        console.error("No code found in URL")
+        setError("No authentication code found in URL")
+        setTimeout(() => router.push("/login?error=missing_code"), 3000)
       }
+      setIsProcessing(false)
     }
 
-    handleCallback()
-  }, [router, searchParams])
+    handleAuth()
+  }, [searchParams, router])
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 p-4">
@@ -71,12 +62,6 @@ export default function AuthCallbackPage() {
             <h1 className="text-xl font-semibold mb-2">Signing you in</h1>
             <p className="text-gray-600">Please wait while we complete the authentication process...</p>
           </>
-        )}
-
-        {debugInfo && (
-          <div className="mt-4 p-3 bg-gray-100 rounded text-left">
-            <p className="text-xs text-gray-500 font-mono whitespace-pre-wrap">{debugInfo}</p>
-          </div>
         )}
       </div>
     </div>
