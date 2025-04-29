@@ -12,7 +12,7 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: true,
     flowType: "pkce",
-    redirectTo: `${typeof window !== "undefined" ? window.location.origin : process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
+    redirectTo: "https://v0-jd-builder-beta.vercel.app/auth/callback",
   },
 })
 

@@ -27,6 +27,7 @@ export function MagicLinkForm() {
         throw new Error("Please use your @atlan.com email address")
       }
 
+      // Use the server action to send the magic link
       const result = await sendMagicLink(email)
 
       if (result.success) {
