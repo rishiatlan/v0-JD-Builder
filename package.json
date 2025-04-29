@@ -61,7 +61,9 @@
     "@supabase/supabase-js": "latest",
     "mammoth": "latest",
     "pdfjs-dist": "latest",
-    "https:": "latest"
+    "https:": "latest",
+    "fs": "latest",
+    "path": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",
