@@ -5,10 +5,30 @@ import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Github, Menu, X, Home, FileText, LayoutTemplateIcon as Template, Award } from "lucide-react"
+import { useAuth } from "@/lib/auth-context"
+import {
+  Github,
+  Menu,
+  X,
+  Home,
+  History,
+  FileText,
+  LayoutTemplateIcon as Template,
+  Award,
+  ChevronDown,
+} from "lucide-react"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { cn } from "@/lib/utils"
 
 export function EnhancedHeader() {
+  const { authState } = useAuth()
   const pathname = usePathname()
   const [isScrolled, setIsScrolled] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
@@ -27,9 +47,9 @@ export function EnhancedHeader() {
     setIsMobileMenuOpen(false)
   }, [pathname])
 
-  // Removed History page from navigation
   const navItems = [
     { name: "Home", href: "/", icon: <Home className="h-4 w-4 mr-2" /> },
+    { name: "History", href: "/history", icon: <History className="h-4 w-4 mr-2" /> },
     { name: "Create JD", href: "/jd/new", icon: <FileText className="h-4 w-4 mr-2" /> },
     { name: "Templates", href: "/templates", icon: <Template className="h-4 w-4 mr-2" /> },
     { name: "JD Standards", href: "/standards", icon: <Award className="h-4 w-4 mr-2" /> },
@@ -87,8 +107,32 @@ export function EnhancedHeader() {
             </a>
           </nav>
 
-          {/* Create JD Button */}
+          {/* User Actions */}
           <div className="flex items-center space-x-3">
+            {/* Always show the user dropdown since we're always authenticated */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="flex items-center">
+                  <div className="flex items-center">
+                    <div className="h-8 w-8 rounded-full bg-primary text-white flex items-center justify-center mr-2">
+                      <span className="text-sm font-medium">{authState.user?.email?.[0] || "U"}</span>
+                    </div>
+                    <span className="hidden md:inline text-sm font-medium">{authState.user?.email}</span>
+                    <ChevronDown className="h-4 w-4 ml-1" />
+                  </div>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <DropdownMenuLabel>My Account</DropdownMenuLabel>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href="/history" className="cursor-pointer flex items-center">
+                    <History className="h-4 w-4 mr-2" />
+                    My JDs
+                  </Link>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               className="bg-primary hover:bg-primary/90 text-white"
               onClick={() => (window.location.href = "/jd/new")}

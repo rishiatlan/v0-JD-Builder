@@ -1,5 +1,6 @@
 "use client"
 
+import { useAuth } from "@/lib/auth-context"
 import { EnhancedHeader } from "@/components/enhanced-header"
 import { EnhancedFooter } from "@/components/enhanced-footer"
 import { Button } from "@/components/ui/button"
@@ -8,6 +9,7 @@ import { AtlanLogo } from "@/components/atlan-logo"
 import { FileText, Users, CheckCircle, ArrowRight } from "lucide-react"
 
 export default function HomePage() {
+  const { authState } = useAuth()
   const router = useRouter()
 
   return (
@@ -25,22 +27,41 @@ export default function HomePage() {
               unique voice and values.
             </p>
 
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button
-                onClick={() => router.push("/jd/new")}
-                className="bg-atlan-primary hover:bg-atlan-primary-dark text-white px-8 py-6 text-lg"
-              >
-                Create New JD
-                <ArrowRight className="ml-2 h-5 w-5" />
-              </Button>
-              <Button
-                onClick={() => router.push("/history")}
-                variant="outline"
-                className="border-atlan-primary text-atlan-primary hover:bg-atlan-primary/10 px-8 py-6 text-lg"
-              >
-                View My JDs
-              </Button>
-            </div>
+            {authState.isAuthenticated ? (
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button
+                  onClick={() => router.push("/jd/new")}
+                  className="bg-atlan-primary hover:bg-atlan-primary-dark text-white px-8 py-6 text-lg"
+                >
+                  Create New JD
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+                <Button
+                  onClick={() => router.push("/history")}
+                  variant="outline"
+                  className="border-atlan-primary text-atlan-primary hover:bg-atlan-primary/10 px-8 py-6 text-lg"
+                >
+                  View My JDs
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button
+                  onClick={() => router.push("/login")}
+                  className="bg-atlan-primary hover:bg-atlan-primary-dark text-white px-8 py-6 text-lg"
+                >
+                  Sign In with @atlan.com
+                  <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+                <Button
+                  onClick={() => router.push("/standards")}
+                  variant="outline"
+                  className="border-atlan-primary text-atlan-primary hover:bg-atlan-primary/10 px-8 py-6 text-lg"
+                >
+                  View JD Standards
+                </Button>
+              </div>
+            )}
           </div>
         </section>
 
@@ -88,16 +109,26 @@ export default function HomePage() {
           <div className="container mx-auto px-4 text-center">
             <h2 className="text-3xl font-bold mb-6">Ready to Create Better Job Descriptions?</h2>
             <p className="text-xl text-slate-600 max-w-2xl mx-auto mb-8">
-              Start creating job descriptions that attract the best talent.
+              Sign in with your @atlan.com email to start creating job descriptions that attract the best talent.
             </p>
 
-            <Button
-              onClick={() => router.push("/jd/new")}
-              className="bg-atlan-primary hover:bg-atlan-primary-dark text-white px-8 py-6 text-lg"
-            >
-              Create New JD
-              <ArrowRight className="ml-2 h-5 w-5" />
-            </Button>
+            {authState.isAuthenticated ? (
+              <Button
+                onClick={() => router.push("/jd/new")}
+                className="bg-atlan-primary hover:bg-atlan-primary-dark text-white px-8 py-6 text-lg"
+              >
+                Create New JD
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+            ) : (
+              <Button
+                onClick={() => router.push("/login")}
+                className="bg-atlan-primary hover:bg-atlan-primary-dark text-white px-8 py-6 text-lg"
+              >
+                Sign In with @atlan.com
+                <ArrowRight className="ml-2 h-5 w-5" />
+              </Button>
+            )}
           </div>
         </section>
       </main>

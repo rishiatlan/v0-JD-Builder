@@ -27,7 +27,7 @@ export default function EditJobDescriptionPage({ params }: { params: { id: strin
             description: error || "Failed to load job description",
             variant: "destructive",
           })
-          router.push("/")
+          router.push("/history")
         }
       } catch (error) {
         console.error("Error loading JD:", error)
@@ -36,7 +36,7 @@ export default function EditJobDescriptionPage({ params }: { params: { id: strin
           description: "An unexpected error occurred",
           variant: "destructive",
         })
-        router.push("/")
+        router.push("/history")
       } finally {
         setLoading(false)
       }

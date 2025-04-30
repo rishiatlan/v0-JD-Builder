@@ -4,6 +4,7 @@ import { Inter, Lexend, JetBrains_Mono } from "next/font/google"
 import "./globals.css"
 import { AppContextProvider } from "@/lib/app-context"
 import { Toaster } from "@/components/ui/toaster"
+import { AuthProvider } from "@/lib/auth-context"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -45,10 +46,12 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${lexend.variable} ${jetbrainsMono.variable}`}>
       <body className="min-h-screen font-sans antialiased">
-        <AppContextProvider>
-          {children}
-          <Toaster />
-        </AppContextProvider>
+        <AuthProvider>
+          <AppContextProvider>
+            {children}
+            <Toaster />
+          </AppContextProvider>
+        </AuthProvider>
       </body>
     </html>
   )

@@ -5,16 +5,18 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
-import { Menu, Home, FileText, LayoutTemplateIcon as Template, Award, Github } from "lucide-react"
+import { Menu, Home, History, FileText, LayoutTemplateIcon as Template, Award, Github } from "lucide-react"
+import { useAuth } from "@/lib/auth-context"
 import { cn } from "@/lib/utils"
 
 export function MobileNav() {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
+  const { authState } = useAuth()
 
-  // Removed History page from navigation
   const navItems = [
     { name: "Home", href: "/", icon: <Home className="h-5 w-5 mr-3" /> },
+    { name: "History", href: "/history", icon: <History className="h-5 w-5 mr-3" /> },
     { name: "Create JD", href: "/jd/new", icon: <FileText className="h-5 w-5 mr-3" /> },
     { name: "Templates", href: "/templates", icon: <Template className="h-5 w-5 mr-3" /> },
     { name: "JD Standards", href: "/standards", icon: <Award className="h-5 w-5 mr-3" /> },
@@ -59,6 +61,20 @@ export function MobileNav() {
                 Repository
               </a>
             </nav>
+          </div>
+
+          <div className="mt-auto border-t border-slate-200 pt-4 pb-6 px-2">
+            {/* Always show the user info since we're always authenticated */}
+            <div className="space-y-3">
+              <div className="flex items-center">
+                <div className="h-10 w-10 rounded-full bg-primary text-white flex items-center justify-center mr-3">
+                  <span className="font-medium">{authState.user?.email?.[0] || "U"}</span>
+                </div>
+                <div className="overflow-hidden">
+                  <p className="font-medium truncate">{authState.user?.email}</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </SheetContent>

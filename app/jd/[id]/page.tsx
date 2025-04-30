@@ -10,12 +10,14 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2, Edit, ArrowLeft, Download, Share2 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
+import { useAuth } from "@/lib/auth-context"
 
 export default function ViewJobDescriptionPage({ params }: { params: { id: string } }) {
   const [jdData, setJdData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const { toast } = useToast()
+  const { authState } = useAuth()
 
   useEffect(() => {
     const loadJD = async () => {
@@ -29,7 +31,7 @@ export default function ViewJobDescriptionPage({ params }: { params: { id: strin
             description: error || "Failed to load job description",
             variant: "destructive",
           })
-          router.push("/")
+          router.push("/history")
         }
       } catch (error) {
         console.error("Error loading JD:", error)
@@ -38,7 +40,7 @@ export default function ViewJobDescriptionPage({ params }: { params: { id: strin
           description: "An unexpected error occurred",
           variant: "destructive",
         })
-        router.push("/")
+        router.push("/history")
       } finally {
         setLoading(false)
       }
@@ -52,7 +54,7 @@ export default function ViewJobDescriptionPage({ params }: { params: { id: strin
   }
 
   const handleBack = () => {
-    router.push("/")
+    router.push("/history")
   }
 
   const handleDownload = () => {
@@ -100,8 +102,8 @@ export default function ViewJobDescriptionPage({ params }: { params: { id: strin
     }
   }
 
-  // Always allow editing
-  const canEdit = true
+  // With stub auth, we'll consider the user as the owner of all JDs
+  const isOwner = true
 
   if (loading) {
     return (
@@ -121,7 +123,7 @@ export default function ViewJobDescriptionPage({ params }: { params: { id: strin
       <main className="flex-1 container mx-auto px-4 py-8">
         <Button variant="ghost" onClick={handleBack} className="mb-6 text-atlan-primary hover:text-atlan-primary-dark">
           <ArrowLeft className="mr-2 h-4 w-4" />
-          Back to Home
+          Back to History
         </Button>
 
         {jdData && (
@@ -132,7 +134,7 @@ export default function ViewJobDescriptionPage({ params }: { params: { id: strin
                   <CardTitle className="text-2xl text-atlan-primary">{jdData.title}</CardTitle>
                   <p className="text-slate-600 mt-1">{jdData.department}</p>
                 </div>
-                {canEdit && (
+                {isOwner && (
                   <Button
                     variant="outline"
                     onClick={handleEdit}

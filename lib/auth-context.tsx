@@ -2,46 +2,56 @@
 
 import { createContext, useContext, type ReactNode } from "react"
 
-// Define the auth state type
-interface AuthState {
+// Define the authentication state type
+export interface AuthState {
   isAuthenticated: boolean
-  user: {
-    email: string
-  } | null
   isLoading: boolean
+  user: {
+    id: string
+    email: string
+    full_name: string | null
+  } | null
 }
 
-// Define the auth context type
+// Define the context type
 interface AuthContextType {
   authState: AuthState
+  signOut: () => Promise<void>
 }
 
-// Create the auth context with default values
-const AuthContext = createContext<AuthContextType>({
-  authState: {
-    isAuthenticated: true,
-    user: {
-      email: "demo@atlan.com",
-    },
-    isLoading: false,
-  },
-})
+// Create the context with default values
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Create the auth provider component
+// Default stub user - always authenticated
+const stubUser = {
+  id: "stub-user-id",
+  email: "user@atlan.com",
+  full_name: "Atlan User",
+}
+
+// Create a provider component
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Always return authenticated state
+  // Stub authentication state - always authenticated
   const authState: AuthState = {
     isAuthenticated: true,
-    user: {
-      email: "demo@atlan.com",
-    },
     isLoading: false,
+    user: stubUser,
   }
 
-  return <AuthContext.Provider value={{ authState }}>{children}</AuthContext.Provider>
+  // Stub sign out function
+  const signOut = async () => {
+    console.log("Sign out called (stubbed)")
+    // No actual sign out happens
+  }
+
+  return <AuthContext.Provider value={{ authState, signOut }}>{children}</AuthContext.Provider>
 }
 
-// Create the useAuth hook
+// Create a hook to use the auth context
 export function useAuth() {
-  return useContext(AuthContext)
+  const context = useContext(AuthContext)
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider")
+  }
+  return context
 }

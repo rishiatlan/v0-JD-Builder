@@ -1,5 +1,12 @@
 import { supabase } from "@/lib/supabase"
 
+// Stub user for authentication
+const stubUser = {
+  id: "stub-user-id",
+  email: "user@atlan.com",
+  full_name: "Atlan User",
+}
+
 export interface JobDescription {
   id: string
   title: string
@@ -18,13 +25,14 @@ export interface JobDescription {
 }
 
 export class JDService {
-  static async createJD(jdData: Partial<JobDescription>, userEmail: string): Promise<JobDescription | null> {
+  static async createJD(jdData: Partial<JobDescription>, userEmail?: string): Promise<JobDescription | null> {
+    const email = userEmail || stubUser.email
     try {
       const { data, error } = await supabase
         .from("job_descriptions")
         .insert({
           ...jdData,
-          created_by_email: userEmail,
+          created_by_email: email,
           created_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
@@ -59,12 +67,13 @@ export class JDService {
     }
   }
 
-  static async getJDsByEmail(email: string): Promise<JobDescription[]> {
+  static async getJDsByEmail(email?: string): Promise<JobDescription[]> {
+    const userEmail = email || stubUser.email
     try {
       const { data, error } = await supabase
         .from("job_descriptions")
         .select("*")
-        .eq("created_by_email", email)
+        .eq("created_by_email", userEmail)
         .order("created_at", { ascending: false })
 
       if (error) {
@@ -98,7 +107,12 @@ export class JDService {
     }
   }
 
-  static async updateJD(id: string, jdData: Partial<JobDescription>): Promise<JobDescription | null> {
+  static async updateJD(
+    id: string,
+    jdData: Partial<JobDescription>,
+    userEmail?: string,
+  ): Promise<JobDescription | null> {
+    const email = userEmail || stubUser.email
     try {
       const { data, error } = await supabase
         .from("job_descriptions")
