@@ -8,7 +8,6 @@ import { useRouter } from "next/navigation"
 import { JDService } from "@/lib/jd-service"
 import { useToast } from "@/components/ui/use-toast"
 import { Loader2 } from "lucide-react"
-import { ProtectedRoute } from "@/components/protected-route"
 
 export default function EditJobDescriptionPage({ params }: { params: { id: string } }) {
   const [jdData, setJdData] = useState<any>(null)
@@ -28,7 +27,7 @@ export default function EditJobDescriptionPage({ params }: { params: { id: strin
             description: error || "Failed to load job description",
             variant: "destructive",
           })
-          router.push("/history")
+          router.push("/")
         }
       } catch (error) {
         console.error("Error loading JD:", error)
@@ -37,7 +36,7 @@ export default function EditJobDescriptionPage({ params }: { params: { id: strin
           description: "An unexpected error occurred",
           variant: "destructive",
         })
-        router.push("/history")
+        router.push("/")
       } finally {
         setLoading(false)
       }
@@ -64,19 +63,15 @@ export default function EditJobDescriptionPage({ params }: { params: { id: strin
   }
 
   return (
-    <ProtectedRoute>
-      <div className="min-h-screen flex flex-col bg-slate-50">
-        <AtlanHeader />
-        <main className="flex-1 container mx-auto px-4 py-8">
-          <h1 className="text-3xl md:text-4xl font-bold text-center text-atlan-primary mb-8">Edit Job Description</h1>
-          <p className="text-center text-slate-600 max-w-3xl mx-auto mb-12">
-            Update your job description details below.
-          </p>
+    <div className="min-h-screen flex flex-col bg-slate-50">
+      <AtlanHeader />
+      <main className="flex-1 container mx-auto px-4 py-8">
+        <h1 className="text-3xl md:text-4xl font-bold text-center text-atlan-primary mb-8">Edit Job Description</h1>
+        <p className="text-center text-slate-600 max-w-3xl mx-auto mb-12">Update your job description details below.</p>
 
-          {jdData && <JobDescriptionForm initialData={jdData} onSuccess={handleSuccess} />}
-        </main>
-        <AtlanFooter />
-      </div>
-    </ProtectedRoute>
+        {jdData && <JobDescriptionForm initialData={jdData} onSuccess={handleSuccess} />}
+      </main>
+      <AtlanFooter />
+    </div>
   )
 }

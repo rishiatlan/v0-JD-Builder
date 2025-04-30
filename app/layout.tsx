@@ -3,10 +3,7 @@ import type { Metadata } from "next"
 import { Inter, Lexend, JetBrains_Mono } from "next/font/google"
 import "./globals.css"
 import { AppContextProvider } from "@/lib/app-context"
-import { AuthProvider } from "@/lib/auth-context"
 import { Toaster } from "@/components/ui/toaster"
-import { SupabaseAuthListener } from "@/components/supabase-auth-listener"
-import { SupabaseDebug } from "@/components/supabase-debug"
 
 const inter = Inter({
   subsets: ["latin"],
@@ -48,14 +45,10 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${lexend.variable} ${jetbrainsMono.variable}`}>
       <body className="min-h-screen font-sans antialiased">
-        <AuthProvider>
-          <AppContextProvider>
-            {children}
-            <Toaster />
-            <SupabaseAuthListener />
-            {process.env.NODE_ENV === "development" && <SupabaseDebug />}
-          </AppContextProvider>
-        </AuthProvider>
+        <AppContextProvider>
+          {children}
+          <Toaster />
+        </AppContextProvider>
       </body>
     </html>
   )
