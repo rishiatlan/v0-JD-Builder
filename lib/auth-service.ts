@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase"
-import { getSession, destroySession } from "@/lib/session"
+import { createSession, destroySession } from "@/lib/session"
 
 export interface UserProfile {
   id: string
@@ -8,73 +8,81 @@ export interface UserProfile {
 }
 
 export class AuthService {
-  static async sendMagicLink(email: string): Promise<{ success: boolean; error?: string }> {
+  static async signUp(
+    email: string,
+    password: string,
+    metadata?: { full_name?: string },
+  ): Promise<{ success: boolean; error?: string }> {
     try {
-      // Validate email domain
-      if (!email.endsWith("@atlan.com")) {
-        return {
-          success: false,
-          error: "Only @atlan.com email addresses are allowed",
-        }
-      }
-
-      // Send magic link with 1-hour expiration
-      const { error } = await supabase.auth.signInWithOtp({
+      // Use Supabase auth to sign up
+      const { data, error } = await supabase.auth.signUp({
         email,
+        password,
         options: {
-          emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`,
-          // Set magic link to expire after 1 hour (3600 seconds)
-          emailLinkExpirationIn: 3600,
+          data: {
+            full_name: metadata?.full_name || null,
+          },
         },
       })
 
       if (error) {
-        console.error("Magic link error:", error)
         return { success: false, error: error.message }
       }
 
+      // Create a session in our custom session system
+      if (data.user) {
+        await createSession({ id: data.user.id, email })
+      }
+
       return { success: true }
-    } catch (error: any) {
-      console.error("Auth service error:", error)
-      return { success: false, error: error.message || "Failed to send magic link" }
+    } catch (error) {
+      console.error("Sign up error:", error)
+      return { success: false, error: error.message || "Failed to sign up" }
+    }
+  }
+
+  static async signIn(email: string, password: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Use Supabase auth to sign in
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      })
+
+      if (error) {
+        return { success: false, error: "Invalid email or password" }
+      }
+
+      // Create a session in our custom session system
+      if (data.user) {
+        await createSession({ id: data.user.id, email })
+      }
+
+      return { success: true }
+    } catch (error) {
+      console.error("Sign in error:", error)
+      return { success: false, error: error.message || "Failed to sign in" }
     }
   }
 
   static async signOut(): Promise<void> {
-    // Sign out from Supabase
     await supabase.auth.signOut()
-
-    // Also destroy our custom session
     await destroySession()
   }
 
   static async getCurrentUser(): Promise<UserProfile | null> {
     try {
-      // First try to get user from Supabase
-      const {
-        data: { user },
-      } = await supabase.auth.getUser()
+      const { data } = await supabase.auth.getUser()
 
-      if (user) {
-        return {
-          id: user.id,
-          email: user.email!,
-          full_name: user.user_metadata.full_name || null,
-        }
+      if (!data.user) {
+        return null
       }
 
-      // If no Supabase user, try our custom session
-      const session = await getSession()
-
-      if (session) {
-        return {
-          id: session.id,
-          email: session.email,
-          full_name: session.full_name,
-        }
+      return {
+        id: data.user.id,
+        email: data.user.email!,
+        full_name: data.user.user_metadata.full_name || null,
       }
-
-      return null
     } catch (error) {
       console.error("Get current user error:", error)
       return null

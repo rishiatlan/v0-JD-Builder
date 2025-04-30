@@ -1,6 +1,4 @@
-// Direct API implementation for Gemini with key rotation and enhanced prompts
-import { getKeyManager } from "./key-manager"
-
+// Direct API implementation for Gemini
 const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
 // Circuit breaker state
@@ -15,7 +13,7 @@ const circuitState = {
 // Rate limiting state
 const rateLimitState = {
   lastRequestTime: 0,
-  minRequestInterval: 500, // Minimum 0.5 second between requests (adjusted for multiple keys)
+  minRequestInterval: 1000, // Minimum 1 second between requests
 }
 
 // Debounce function
@@ -30,30 +28,8 @@ function debounce<F extends (...args: any[]) => any>(func: F, wait: number) {
   }
 }
 
-// JSON repair utility for fixing malformed JSON responses
-function jsonrepair(json: string): string {
-  try {
-    // Simple JSON repair for common issues
-    const fixed = json
-      .replace(/,\s*}/g, "}") // Remove trailing commas in objects
-      .replace(/,\s*\]/g, "]") // Remove trailing commas in arrays
-      .replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":') // Ensure property names are quoted
-      .replace(/\\/g, "\\\\") // Escape backslashes
-      .replace(/\n/g, "\\n") // Escape newlines
-      .replace(/\r/g, "\\r") // Escape carriage returns
-      .replace(/\t/g, "\\t") // Escape tabs
-
-    // Try to parse it
-    JSON.parse(fixed)
-    return fixed
-  } catch (e) {
-    // If simple repair fails, return the original
-    return json
-  }
-}
-
-// Function to chunk text with overlap to avoid losing context
-function chunkText(text: string, maxChunkSize = 4000, overlap = 100): string[] {
+// Function to chunk text to avoid overloading the model
+function chunkText(text: string, maxChunkSize = 4000): string[] {
   if (text.length <= maxChunkSize) {
     return [text]
   }
@@ -71,10 +47,7 @@ function chunkText(text: string, maxChunkSize = 4000, overlap = 100): string[] {
       // If current paragraph doesn't fit, save current chunk and start a new one
       if (currentChunk) {
         chunks.push(currentChunk)
-        // Add overlap from previous chunk if possible
-        const words = currentChunk.split(/\s+/)
-        const overlapText = words.slice(-Math.min(words.length, Math.floor(overlap / 5))).join(" ")
-        currentChunk = overlapText + "\n\n" + paragraph
+        currentChunk = paragraph
       } else {
         // If a single paragraph is too long, split by sentences
         const sentences = paragraph.split(/(?<=[.!?])\s+/)
@@ -82,17 +55,8 @@ function chunkText(text: string, maxChunkSize = 4000, overlap = 100): string[] {
           if (currentChunk.length + sentence.length + 1 <= maxChunkSize) {
             currentChunk += (currentChunk ? " " : "") + sentence
           } else {
-            if (currentChunk) {
-              chunks.push(currentChunk)
-              // Add overlap from previous chunk
-              const words = currentChunk.split(/\s+/)
-              const overlapText = words.slice(-Math.min(words.length, Math.floor(overlap / 5))).join(" ")
-              currentChunk = overlapText + " " + sentence
-            } else {
-              // If a single sentence is too long, just split it
-              chunks.push(sentence.substring(0, maxChunkSize))
-              currentChunk = sentence.substring(maxChunkSize)
-            }
+            chunks.push(currentChunk)
+            currentChunk = sentence
           }
         }
       }
@@ -106,40 +70,7 @@ function chunkText(text: string, maxChunkSize = 4000, overlap = 100): string[] {
   return chunks
 }
 
-// Retry function with exponential backoff
-async function retryWithBackoff<T>(
-  apiCallFn: () => Promise<T>,
-  retries = 3,
-  baseDelay = 500,
-  statusesToRetry = [429, 500, 502, 503, 504],
-): Promise<T> {
-  let lastError: any
-
-  for (let attempt = 0; attempt < retries; attempt++) {
-    try {
-      return await apiCallFn()
-    } catch (error: any) {
-      lastError = error
-
-      // Check if this is a status code we should retry
-      const shouldRetry =
-        (error.status && statusesToRetry.includes(error.status)) ||
-        (error.message && error.message.includes("overloaded"))
-
-      if (!shouldRetry) {
-        throw error // Don't retry if it's not a retriable error
-      }
-
-      const delay = Math.min(2 ** attempt * baseDelay, 10000) // Cap at 10 seconds
-      console.log(`Retry attempt ${attempt + 1}/${retries} failed, waiting ${delay}ms`)
-      await new Promise((resolve) => setTimeout(resolve, delay))
-    }
-  }
-
-  throw lastError
-}
-
-// Function to generate content with Gemini with improved error handling and key rotation
+// Function to generate content with Gemini with circuit breaker pattern
 export async function generateWithGemini(prompt: string) {
   // Check if circuit is open (API is known to be down)
   if (circuitState.isOpen) {
@@ -164,17 +95,16 @@ export async function generateWithGemini(prompt: string) {
   }
 
   try {
-    // Get an API key from the key manager
-    const keyManager = getKeyManager()
-    const apiKey = keyManager.getNextKey()
+    // Replace GEMINI_API_KEY with the actual environment variable
+    const apiKey = process.env.GEMINI_API_KEY
 
     if (!apiKey) {
-      console.error("No API keys available")
-      throw new Error("All API keys are currently unavailable")
+      console.error("GEMINI_API_KEY environment variable is not set")
+      throw new Error("API key not configured")
     }
 
-    // Chunk the prompt if it's too large - now with overlap
-    const promptChunks = chunkText(prompt, 4000, 100)
+    // Chunk the prompt if it's too large
+    const promptChunks = chunkText(prompt, 4000)
     let fullResponse = ""
 
     // Process each chunk
@@ -202,88 +132,55 @@ export async function generateWithGemini(prompt: string) {
       // Update rate limit state
       rateLimitState.lastRequestTime = Date.now()
 
-      // Use retryWithBackoff for API calls
-      const makeApiCall = async () => {
-        const response = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  {
-                    text: processedChunk,
-                  },
-                ],
-              },
-            ],
-            generationConfig: {
-              temperature: 0.7,
-              topK: 40,
-              topP: 0.95,
-              maxOutputTokens: 8192,
+      // Use native fetch instead of importing https
+      const response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: processedChunk,
+                },
+              ],
             },
-            safetySettings: [
-              {
-                category: "HARM_CATEGORY_HARASSMENT",
-                threshold: "BLOCK_MEDIUM_AND_ABOVE",
-              },
-              {
-                category: "HARM_CATEGORY_HATE_SPEECH",
-                threshold: "BLOCK_MEDIUM_AND_ABOVE",
-              },
-              {
-                category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                threshold: "BLOCK_MEDIUM_AND_ABOVE",
-              },
-              {
-                category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-                threshold: "BLOCK_MEDIUM_AND_ABOVE",
-              },
-            ],
-          }),
-        })
+          ],
+          generationConfig: {
+            temperature: 0.7,
+            topK: 40,
+            topP: 0.95,
+            maxOutputTokens: 8192,
+          },
+        }),
+      })
 
-        if (!response.ok) {
-          const errorText = await response.text()
-          console.error(`API request failed with status ${response.status}:`, errorText)
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error(`API request failed with status ${response.status}:`, errorText)
 
-          // Report error to key manager
-          keyManager.reportError(apiKey)
+        // If the model is overloaded (503), update circuit breaker
+        if (response.status === 503) {
+          circuitState.failureCount++
+          circuitState.lastFailureTime = Date.now()
 
-          // Create an error object with status for the retry mechanism
-          const error = new Error(`API request failed with status ${response.status}: ${errorText}`)
-          ;(error as any).status = response.status
-
-          // Update circuit breaker for 503 errors
-          if (response.status === 503) {
-            circuitState.failureCount++
-            circuitState.lastFailureTime = Date.now()
-
-            if (circuitState.failureCount >= circuitState.failureThreshold) {
-              circuitState.isOpen = true
-              console.log("Circuit breaker opened due to multiple failures")
-            }
+          if (circuitState.failureCount >= circuitState.failureThreshold) {
+            circuitState.isOpen = true
+            console.log("Circuit breaker opened due to multiple failures")
           }
 
-          throw error
+          throw new Error("AI service is currently overloaded")
         }
 
-        const data = await response.json()
-        return data
+        throw new Error(`API request failed with status ${response.status}: ${errorText}`)
       }
-
-      // Call API with retry mechanism
-      const data = await retryWithBackoff(makeApiCall)
-
-      // Report success to key manager
-      keyManager.reportSuccess(apiKey)
 
       // Reset failure count on success
       circuitState.failureCount = 0
 
+      const data = await response.json()
       console.log(`Gemini API response for chunk ${i + 1}:`, JSON.stringify(data).substring(0, 200) + "...")
 
       if (
@@ -315,172 +212,78 @@ export async function generateWithGemini(prompt: string) {
 // Debounced version of generateWithGemini for UI interactions
 export const debouncedGenerateWithGemini = debounce(generateWithGemini, 500)
 
-// Enhanced prompts for JD generation with Atlan-specific guidelines
-const ATLAN_JD_SYSTEM_PROMPT = `
-You are an expert job description writer for Atlan, a modern data collaboration workspace.
-Follow these Atlan JD Standards when creating job descriptions:
-
-1. CLARITY: Use clear, specific language that avoids jargon and ambiguity.
-2. INCLUSIVITY: Use gender-neutral and inclusive language throughout.
-3. COMPLETENESS: Include all essential components (overview, responsibilities, qualifications, benefits).
-4. ENGAGEMENT: Create compelling content that connects the role to Atlan's mission.
-5. ATLAN VOICE: Maintain Atlan's voice - mission-driven, ownership-focused, and inspirational.
-
-IMPORTANT GUIDELINES:
-- NEVER use phrases like "X years of experience" or "minimum Y years required"
-- Instead, describe skills using phrases like "proven experience," "track record," or "demonstrated ability"
-- Frame qualifications based on impact and capabilities, not tenure
-- Focus on outcomes and achievements rather than time spent in roles
-- Be open to non-traditional backgrounds and career paths
-
-FORMAT:
-- Position Overview: Engaging paragraph explaining purpose and impact
-- "What will you do?": 7-10 bullet points using action verbs
-- "What makes you a great match for us?": 7-10 bullet points focusing on skills over experience
-- Benefits & Culture: Highlight Atlan's unique benefits and values
-- Diversity Statement: Express Atlan's commitment to diversity and inclusion
-
-Always structure your response as valid JSON for programmatic processing.
-`
-
-// Comprehensive list of potentially problematic terms to avoid in JDs
-const BIAS_DETECTION_PROMPT = `
-Analyze this job description for potentially biased or non-inclusive language. Look for:
-
-1. Gender-coded terms: Not just obvious ones like "he/she" or "guys", but also terms that research shows may subtly discourage certain genders (e.g., "aggressive", "competitive", "dominant" may discourage women; "collaborative", "supportive", "nurturing" may discourage men)
-
-2. Age-biased language: Terms like "young", "energetic", "digital native", "recent graduate", "fresh", or anything implying a specific age group
-
-3. Cultural or educational bias: References to "cultural fit", specific educational institutions, or requirements that may exclude qualified candidates from diverse backgrounds
-
-4. Ability bias: Terms that assume physical abilities without mentioning accommodations (e.g., "walk", "see", "hear", "stand")
-
-5. Years of experience requirements: Any mention of specific years of experience like "5+ years", "minimum of 3 years", "at least X years" - these exclude qualified candidates with non-traditional backgrounds
-
-6. Unnecessarily exclusionary requirements: Specific tools/technologies when skills are transferable, or requirements not essential to job success
-
-7. Superlatives and hyperbole: Terms like "ninja", "rockstar", "guru", "world-class", "exceptional" that may discourage qualified candidates who don't identify with such labels
-
-8. Idioms or colloquialisms: Expressions that may not translate well across cultures or be understood by non-native speakers
-
-9. Unnecessarily complex language: Jargon or technical terms that aren't explained and may exclude qualified candidates
-
-Don't limit yourself to these examples - identify ANY language that could potentially exclude qualified candidates.
-
-For each issue found, return:
-- The exact problematic term or phrase
-- The surrounding context
-- A specific suggestion for replacement
-- The reason it could be problematic
-
-Return as JSON array: [{"term":"problematic term","context":"surrounding text","suggestion":"better alternative","reason":"explanation"}]
-If no bias detected, return empty array.
-`
-
-// Function to structure a JD according to Atlan standards with separate analysis
+// Function to structure a JD according to Atlan standards
 export async function generateAtlanJD(data: any) {
-  try {
-    // Step 1: Generate the core JD content with enhanced prompt
-    const jdContent = await generateAtlanJDWithAI(data)
-
-    // Step 2: If successful, perform a separate analysis call
-    if (jdContent && jdContent.sections) {
-      try {
-        // Combine all sections for analysis
-        const allContent = [
-          jdContent.sections.overview,
-          ...(Array.isArray(jdContent.sections.responsibilities)
-            ? jdContent.sections.responsibilities
-            : [jdContent.sections.responsibilities]),
-          ...(Array.isArray(jdContent.sections.qualifications)
-            ? jdContent.sections.qualifications
-            : [jdContent.sections.qualifications]),
-        ].join("\n\n")
-
-        // Perform analysis in a separate call with enhanced prompt
-        const analysis = await analyzeJDContent(allContent)
-
-        // Merge the analysis with the JD content
-        return {
-          ...jdContent,
-          analysis: analysis ||
-            jdContent.analysis || {
-              clarity: 80,
-              inclusivity: 80,
-              seo: 80,
-              attraction: 80,
-            },
-        }
-      } catch (analysisError) {
-        console.error("Error during JD analysis:", analysisError)
-        // Return the JD content even if analysis fails
-        return jdContent
-      }
-    }
-
-    throw new Error("Failed to generate valid JD content")
-  } catch (error) {
-    console.error("Error in generateAtlanJD:", error)
-    throw error
-  }
+  // Always use the AI service, no fallbacks
+  return await generateAtlanJDWithAI(data)
 }
 
-// Add a function to sanitize years of experience phrases after JD generation
-function sanitizeYearsOfExperience(text) {
-  if (!text) return text
-
-  const bannedPatterns = [
-    /(\d+)\+?\s*years? of experience/gi,
-    /at least (\d+)\s*years/gi,
-    /minimum of (\d+)\s*years/gi,
-    /(\d+)\+?\s*years? in/gi,
-    /experience of (\d+)\+?\s*years/gi,
-  ]
-
-  const replacements = ["proven experience", "demonstrated ability", "track record", "solid background", "proficiency"]
-
-  let sanitizedText = text
-
-  for (const pattern of bannedPatterns) {
-    sanitizedText = sanitizedText.replace(pattern, (match) => {
-      // Get a random replacement phrase
-      const replacement = replacements[Math.floor(Math.random() * replacements.length)]
-      console.log(`Replacing "${match}" with "${replacement}"`)
-      return replacement
-    })
-  }
-
-  return sanitizedText
-}
-
-// AI-based JD generation with improved JSON parsing and enhanced prompt
+// AI-based JD generation
 async function generateAtlanJDWithAI(data: any) {
-  // Enhanced prompt template with Atlan JD Standards
   const prompt = `
-    ${ATLAN_JD_SYSTEM_PROMPT}
-    
-    Create a detailed job description for ${data.title} at Atlan that will attract top 10% global talent.
+    Create a detailed, production-ready job description for the role of ${data.title} at Atlan following the Atlan Standard of Excellence.
     
     About the role:
     - Title: ${data.title}
     - Department: ${data.department}
-    - Key outcomes: ${data.outcomes}
-    - Mindset: ${data.mindset}
-    - Strategic advantage: ${data.advantage}
-    - Key decisions: ${data.decisions}
+    - Key outcomes that define success: ${data.outcomes}
+    - Mindset/instincts of top performers: ${data.mindset}
+    - Strategic advantage this role provides: ${data.advantage}
+    - Key decisions/trade-offs in this role: ${data.decisions}
     
-    Follow these guidelines:
-    1. Use the Voice of Atlan - strategic clarity, inspirational language, ownership focus, and mission-driven tone
-    2. Avoid corporate clichés, resume buzzwords, and bland statements
-    3. Focus on outcomes and impact rather than just responsibilities
-    4. Highlight the strategic importance of the role to Atlan's mission
-    5. Use inclusive language that appeals to diverse candidates
-    6. NEVER use "X years of experience" - instead use phrases like:
-       - "Proven ability to design and scale systems"
-       - "Track record of delivering complex projects"
-       - "Demonstrated expertise in problem-solving"
+    The JD should follow Atlan's approved framework with these sections:
+    1. Position Overview - A detailed paragraph explaining the role's purpose, impact, and where it fits in the organization
+    2. "What will you do?" - 7-10 specific, detailed bullet points of key responsibilities that clearly outline day-to-day work and strategic contributions
+    3. "What makes you a great match for us?" - 7-10 specific, detailed bullet points of qualifications, experience, and traits required for success
     
-    Format as JSON: {"sections":{"overview":"...","responsibilities":["..."],"qualifications":["..."]}, "analysis":{"clarity":85,"inclusivity":78,"seo":92,"attraction":88}}
+    Voice and Tone Guidelines:
+    - Strategic clarity with specific details about the role's impact
+    - Inspirational language that connects to Atlan's mission
+    - Focus on ownership and high-leverage behaviors with concrete examples
+    - Mission-driven and excellence-first voice
+    - Avoid corporate clichés and bland statements
+    - Attract globally elite, mission-driven candidates with compelling language
+    
+    Format the response as a JSON object with the following structure:
+    {
+      "sections": {
+        "overview": "...",
+        "responsibilities": ["...", "...", "..."],
+        "qualifications": ["...", "...", "..."]
+      },
+      "analysis": {
+        "clarity": 85,
+        "inclusivity": 78,
+        "seo": 92,
+        "attraction": 88
+      },
+      "suggestions": [
+        {
+          "section": "overview",
+          "original": "...",
+          "suggestion": "...",
+          "reason": "..."
+        }
+      ],
+      "biasFlags": [
+        {
+          "term": "...",
+          "context": "...",
+          "suggestion": "...",
+          "reason": "..."
+        }
+      ]
+    }
+    
+    Ensure the content is bias-free, inclusive, and optimized to attract top 10% global talent.
+    Make sure each responsibility and qualification is specific, detailed, and tailored to the role.
+    
+    IMPORTANT: 
+    - AVOID phrases like "X years of experience" or "minimum Y years" in qualifications
+    - Instead, describe skills and achievements with language like "proven experience," "track record," or outcome-based accomplishments
+    - Frame qualifications based on impact and capabilities, not tenure
+    - Include specific technical skills and concrete examples where appropriate
+    - Use phrases like "demonstrated ability to..." or "experience successfully..." instead of time-based requirements
   `
 
   console.log("Generating Atlan JD with data:", JSON.stringify(data))
@@ -500,36 +303,8 @@ async function generateAtlanJDWithAI(data: any) {
   }
 
   try {
-    // Use jsonrepair to fix common JSON issues before parsing
-    const repairedJson = jsonrepair(jsonStr)
-    const parsedData = JSON.parse(repairedJson)
-
-    // Sanitize any years of experience phrases that might have slipped through
-    if (parsedData.sections) {
-      // Sanitize overview
-      if (parsedData.sections.overview) {
-        parsedData.sections.overview = sanitizeYearsOfExperience(parsedData.sections.overview)
-      }
-
-      // Sanitize responsibilities
-      if (Array.isArray(parsedData.sections.responsibilities)) {
-        parsedData.sections.responsibilities = parsedData.sections.responsibilities.map((item) =>
-          sanitizeYearsOfExperience(item),
-        )
-      } else if (parsedData.sections.responsibilities) {
-        parsedData.sections.responsibilities = sanitizeYearsOfExperience(parsedData.sections.responsibilities)
-      }
-
-      // Sanitize qualifications
-      if (Array.isArray(parsedData.sections.qualifications)) {
-        parsedData.sections.qualifications = parsedData.sections.qualifications.map((item) =>
-          sanitizeYearsOfExperience(item),
-        )
-      } else if (parsedData.sections.qualifications) {
-        parsedData.sections.qualifications = sanitizeYearsOfExperience(parsedData.sections.qualifications)
-      }
-    }
-
+    // Parse the JSON response
+    const parsedData = JSON.parse(jsonStr)
     console.log("Successfully parsed JD data:", Object.keys(parsedData))
     return parsedData
   } catch (parseError) {
@@ -539,54 +314,57 @@ async function generateAtlanJDWithAI(data: any) {
   }
 }
 
-// New function to analyze JD content separately with enhanced prompt
-async function analyzeJDContent(content: string) {
-  const prompt = `
-    You are an expert job description analyzer for Atlan.
-    
-    Analyze this job description content for quality metrics according to Atlan JD Standards:
-    
-    "${content.substring(0, 3000)}${content.length > 3000 ? "..." : ""}"
-    
-    Evaluate on these dimensions (1-100 scale):
-    
-    1. CLARITY: How clear, specific, and jargon-free is the language? Does it avoid ambiguity and clearly communicate expectations?
-    
-    2. INCLUSIVITY: How well does it use gender-neutral and inclusive language? Does it avoid terms that might discourage diverse candidates?
-    
-    3. SEO OPTIMIZATION: How well is it optimized for search engines and job boards? Does it use relevant keywords naturally?
-    
-    4. TALENT ATTRACTION: How compelling and engaging is it for top candidates? Does it inspire and connect to Atlan's mission?
-    
-    Return JSON with these metrics:
-    {"clarity": 85, "inclusivity": 78, "seo": 92, "attraction": 88}
-  `
+// Template-based fallback JD generation
+// function generateFallbackJD(data: any) {
+//   // Create a template-based JD using the provided data
+//   const overview = `As a ${data.title} in the ${data.department} department at Atlan, you will play a crucial role in ${data.outcomes}. This position requires someone with ${data.mindset}, who can navigate complex decisions related to ${data.decisions} while contributing to ${data.advantage}.`
 
-  try {
-    const response = await generateWithGemini(prompt)
+//   // Generate responsibilities based on the role
+//   const responsibilities = [
+//     `Drive key outcomes including ${data.outcomes}`,
+//     `Demonstrate and embody the mindset of ${data.mindset}`,
+//     `Make strategic decisions regarding ${data.decisions}`,
+//     `Contribute to Atlan's competitive advantage through ${data.advantage}`,
+//     `Collaborate with cross-functional teams to achieve department goals`,
+//     `Continuously improve processes and methodologies within your domain`,
+//   ]
 
-    // Extract JSON
-    const jsonMatch = response.match(/\{[\s\S]*\}/)
-    if (jsonMatch) {
-      const jsonStr = jsonMatch[0]
-      const repairedJson = jsonrepair(jsonStr)
-      return JSON.parse(repairedJson)
-    }
+//   // Generate qualifications based on the role
+//   const qualifications = [
+//     `Proven experience in ${data.department} or related field`,
+//     `Strong understanding of ${data.outcomes.split(" ").slice(0, 3).join(" ")}`,
+//     `Demonstrated ability to ${data.mindset.split(" ").slice(0, 3).join(" ")}`,
+//     `Experience making decisions related to ${data.decisions.split(" ").slice(0, 3).join(" ")}`,
+//     `Excellent communication and collaboration skills`,
+//     `Passion for Atlan's mission and values`,
+//   ]
 
-    throw new Error("Could not extract analysis JSON")
-  } catch (error) {
-    console.error("Error analyzing JD content:", error)
-    // Return default values if analysis fails
-    return {
-      clarity: 80,
-      inclusivity: 80,
-      seo: 80,
-      attraction: 80,
-    }
-  }
-}
+//   return {
+//     sections: {
+//       overview,
+//       responsibilities,
+//       qualifications,
+//     },
+//     analysis: {
+//       clarity: 80,
+//       inclusivity: 85,
+//       seo: 75,
+//       attraction: 80,
+//     },
+//     suggestions: [
+//       {
+//         section: "overview",
+//         original: "This is a template-generated overview.",
+//         suggestion: "Consider adding more specific details about the role's impact.",
+//         reason: "More specificity will attract better candidates.",
+//       },
+//     ],
+//     biasFlags: [],
+//     isTemplateFallback: true, // Flag to indicate this was generated by the template
+//   }
+// }
 
-// Function to get refinement suggestions for a specific section with enhanced prompt
+// Function to get refinement suggestions for a specific section
 export async function getRefinementSuggestions(section: string, content: string) {
   try {
     // Try to use the AI service
@@ -598,26 +376,33 @@ export async function getRefinementSuggestions(section: string, content: string)
   }
 }
 
-// AI-based refinement suggestions with improved parsing and enhanced prompt
+// AI-based refinement suggestions
 async function getRefinementSuggestionsWithAI(section: string, content: string) {
-  // Enhanced prompt with Atlan JD Standards
   const prompt = `
-    You are an expert job description editor for Atlan.
-    
-    Analyze this ${section} section of a job description according to Atlan JD Standards:
+    Analyze the following ${section} section of a job description for Atlan and provide refinement suggestions:
     
     "${content}"
     
-    Provide 3-4 specific suggestions that:
-    1. Enhance clarity and remove ambiguity
-    2. Use more inclusive and gender-neutral language
-    3. Incorporate Atlan's voice (mission-driven, ownership-focused, inspirational)
-    4. Make the content more compelling for top talent
-    5. Focus on strategic impact and outcomes rather than just tasks
+    Provide suggestions that:
+    1. Enhance strategic clarity
+    2. Use more inspirational language
+    3. Focus on ownership and high-leverage behaviors
+    4. Align with Atlan's mission-driven and excellence-first voice
+    5. Remove any corporate clichés or bland statements
+    6. Make it more attractive to globally elite, mission-driven candidates
     
-    Format as JSON array: [{"original":"specific text to replace","suggestion":"improved text","reason":"explanation of improvement"}]
+    Format the response as a JSON array with the following structure:
+    [
+      {
+        "original": "...",
+        "suggestion": "...",
+        "reason": "..."
+      }
+    ]
     
-    Be specific about exactly what text should be replaced, not general advice.
+    Provide 2-3 high-impact suggestions that would significantly improve the content.
+    
+    IMPORTANT: Your response must be valid JSON that can be parsed with JSON.parse().
   `
 
   console.log(`Getting refinement suggestions for ${section} section`)
@@ -637,9 +422,8 @@ async function getRefinementSuggestionsWithAI(section: string, content: string) 
   }
 
   try {
-    // Use jsonrepair to fix common JSON issues before parsing
-    const repairedJson = jsonrepair(jsonStr)
-    return JSON.parse(repairedJson)
+    // Parse the JSON response
+    return JSON.parse(jsonStr)
   } catch (parseError) {
     console.error("JSON parsing error for refinement suggestions:", parseError)
     console.error("Failed to parse:", jsonStr)
@@ -706,10 +490,10 @@ function generateFallbackRefinements(section: string, content: string) {
   ]
 }
 
-// Function to check for bias in JD content with improved chunking, parsing and enhanced prompt
+// Function to check for bias in JD content
 export async function checkForBias(content: string) {
   try {
-    // Try to use the AI service with improved chunking
+    // Try to use the AI service
     return await checkForBiasWithAI(content)
   } catch (error) {
     console.log("AI service unavailable for bias check, using fallback check")
@@ -718,75 +502,72 @@ export async function checkForBias(content: string) {
   }
 }
 
-// AI-based bias check with improved chunking, parsing and enhanced prompt
+// AI-based bias check
 async function checkForBiasWithAI(content: string) {
-  // Chunk the content with overlap to maintain context
-  const contentChunks = chunkText(content, 3000, 100)
+  // Chunk the content to avoid overloading the model
+  const contentChunks = chunkText(content, 3000)
   let allBiasFlags: any[] = []
 
-  // First, do a quick check for years of experience patterns
-  const yearsPatterns = [
-    /\d+\+?\s*years? of experience/gi,
-    /at least \d+\s*years/gi,
-    /minimum of \d+\s*years/gi,
-    /\d+\+?\s*years? in/gi,
-    /experience of \d+\+?\s*years/gi,
-  ]
-
-  for (const pattern of yearsPatterns) {
-    const matches = content.match(pattern)
-    if (matches) {
-      for (const match of matches) {
-        // Extract the context around the match
-        const index = content.indexOf(match)
-        const start = Math.max(0, index - 30)
-        const end = Math.min(content.length, index + match.length + 30)
-        const context = content.substring(start, end)
-
-        allBiasFlags.push({
-          term: match,
-          context: context,
-          suggestion: "Replace with 'proven ability' or 'demonstrated expertise'",
-          reason: "Years-based criteria may exclude qualified candidates with non-traditional backgrounds",
-        })
-      }
-    }
-  }
-
-  // Continue with the regular LLM-based bias check
   for (let i = 0; i < contentChunks.length; i++) {
     const chunk = contentChunks[i]
 
-    // Enhanced prompt with comprehensive bias detection
-    const prompt = BIAS_DETECTION_PROMPT + `\n\nAnalyze this text:\n"${chunk}"`
+    const prompt = `
+    Analyze the following job description content for potential bias, non-inclusive language, or exclusionary terms:
+    
+    "${chunk}"
+    
+    Identify any gender-coded, exclusionary, or non-inclusive terms, with special attention to:
+    1. Gender-coded language (he/she, him/her, etc.)
+    2. Years of experience requirements (e.g., "5+ years experience", "minimum 3 years", etc.)
+    3. Exclusionary terms or phrases that might discourage diverse candidates
+    
+    Format the response as a JSON array with the following structure:
+    [
+      {
+        "term": "...",
+        "context": "...",
+        "suggestion": "...",
+        "reason": "..."
+      }
+    ]
+    
+    For years of experience requirements, suggest alternatives like:
+    - "Proven experience in..."
+    - "Demonstrated ability to..."
+    - "Track record of..."
+    - "History of successfully..."
+    
+    If no bias is detected, return an empty array.
+    
+    IMPORTANT: Your response must be valid JSON that can be parsed with JSON.parse().
+  `
 
     console.log(`Checking for bias in content chunk ${i + 1}/${contentChunks.length}`)
+    const response = await generateWithGemini(prompt)
+    console.log(`Raw bias check response for chunk ${i + 1}:`, response.substring(0, 200) + "...")
+
+    // Try to extract JSON if the response contains non-JSON text
+    let jsonStr = response
+
+    // Look for JSON-like structure if the response isn't pure JSON
+    if (!jsonStr.trim().startsWith("[")) {
+      const jsonMatch = response.match(/\[[\s\S]*\]/)
+      if (jsonMatch) {
+        jsonStr = jsonMatch[0]
+        console.log("Extracted JSON array from response:", jsonStr.substring(0, 200) + "...")
+      } else if (jsonStr.includes("[]") || jsonStr.includes("[ ]")) {
+        // Handle empty array case
+        continue
+      }
+    }
 
     try {
-      const response = await generateWithGemini(prompt)
-      console.log(`Raw bias check response for chunk ${i + 1}:`, response.substring(0, 200) + "...")
-
-      // Try to extract JSON if the response contains non-JSON text
-      let jsonStr = response
-
-      // Look for JSON-like structure if the response isn't pure JSON
-      if (!jsonStr.trim().startsWith("[")) {
-        const jsonMatch = response.match(/\[[\s\S]*\]/)
-        if (jsonMatch) {
-          jsonStr = jsonMatch[0]
-          console.log("Extracted JSON array from response:", jsonStr.substring(0, 200) + "...")
-        } else if (jsonStr.includes("[]") || jsonStr.includes("[ ]")) {
-          // Handle empty array case
-          continue
-        }
-      }
-
-      // Use jsonrepair to fix common JSON issues before parsing
-      const repairedJson = jsonrepair(jsonStr)
-      const biasFlags = JSON.parse(repairedJson)
+      // Parse the JSON response
+      const biasFlags = JSON.parse(jsonStr)
       allBiasFlags = [...allBiasFlags, ...biasFlags]
     } catch (parseError) {
       console.error("JSON parsing error for bias check:", parseError)
+      console.error("Failed to parse:", jsonStr)
       // Continue with other chunks instead of failing completely
     }
 
@@ -815,6 +596,26 @@ function generateFallbackBiasCheck(content: string) {
     { term: "young", suggestion: "energetic", reason: "Age-neutral language is more inclusive" },
     { term: "aggressive", suggestion: "proactive", reason: "Avoid terms with gender-coded connotations" },
     { term: "competitive", suggestion: "achievement-oriented", reason: "Avoid terms with gender-coded connotations" },
+    {
+      term: "years of experience",
+      suggestion: "proven experience",
+      reason: "Years-based criteria may exclude qualified candidates with non-linear backgrounds",
+    },
+    {
+      term: "years experience",
+      suggestion: "demonstrated ability",
+      reason: "Years-based criteria may exclude qualified candidates with non-linear backgrounds",
+    },
+    {
+      term: "minimum years",
+      suggestion: "track record of",
+      reason: "Years-based criteria may exclude qualified candidates with non-linear backgrounds",
+    },
+    {
+      term: "at least N years",
+      suggestion: "history of successfully",
+      reason: "Years-based criteria may exclude qualified candidates with non-linear backgrounds",
+    },
   ]
 
   const contentLower = content.toLowerCase()

@@ -1,175 +1,228 @@
-import { supabase } from "@/lib/supabase"
+import { getSupabaseAdmin, supabase } from "@/lib/supabase"
 
-// Stub user for authentication
-const stubUser = {
-  id: "stub-user-id",
-  email: "user@atlan.com",
-  full_name: "Atlan User",
-}
-
-export interface JobDescription {
-  id: string
+export interface JDData {
+  id?: string
   title: string
-  company?: string
-  department?: string
-  location?: string
-  job_type?: string
-  experience_level?: string
-  description?: string
-  requirements?: string
-  responsibilities?: string
-  benefits?: string
-  created_by_email: string
-  created_at: string
-  updated_at: string
+  department: string
+  content: any
+  user_email?: string
+  is_template?: boolean
+  is_public?: boolean
+  status?: string
 }
 
 export class JDService {
-  static async createJD(jdData: Partial<JobDescription>, userEmail?: string): Promise<JobDescription | null> {
-    const email = userEmail || stubUser.email
+  static async saveJD(jdData: JDData): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
-      const { data, error } = await supabase
-        .from("job_descriptions")
-        .insert({
-          ...jdData,
-          created_by_email: email,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .select()
-        .single()
+      // Prepare JD data
+      const now = new Date().toISOString()
+      const supabaseAdmin = getSupabaseAdmin()
 
-      if (error) {
-        console.error("Error creating JD:", error)
-        return null
+      let result
+
+      // Update existing JD or create new one
+      if (jdData.id) {
+        const { data, error } = await supabaseAdmin
+          .from("job_descriptions")
+          .update({
+            title: jdData.title,
+            department: jdData.department,
+            content: jdData.content,
+            user_email: jdData.user_email || null,
+            is_template: jdData.is_template || false,
+            is_public: jdData.is_public || false,
+            status: jdData.status || "draft",
+            updated_at: now,
+          })
+          .eq("id", jdData.id)
+          .select()
+          .single()
+
+        if (error) throw error
+        result = data
+      } else {
+        const { data, error } = await supabaseAdmin
+          .from("job_descriptions")
+          .insert({
+            title: jdData.title,
+            department: jdData.department,
+            content: jdData.content,
+            user_email: jdData.user_email || null,
+            is_template: jdData.is_template || false,
+            is_public: jdData.is_public || false,
+            status: jdData.status || "draft",
+            created_at: now,
+            updated_at: now,
+          })
+          .select()
+          .single()
+
+        if (error) throw error
+        result = data
       }
 
-      return data
+      // Log the action in user history
+      await this.logUserAction(jdData.user_email, jdData.id ? "update" : "create", "job_description", result?.id, {
+        title: jdData.title,
+      })
+
+      return { success: true, data: result }
     } catch (error) {
-      console.error("Error in createJD:", error)
-      return null
+      console.error("Error saving JD:", error)
+      return { success: false, error: error.message || "Failed to save job description" }
     }
   }
 
-  static async getJDById(id: string): Promise<JobDescription | null> {
+  static async getJD(id: string): Promise<{ success: boolean; data?: any; error?: string }> {
     try {
       const { data, error } = await supabase.from("job_descriptions").select("*").eq("id", id).single()
 
       if (error) {
-        console.error("Error getting JD by ID:", error)
-        return null
+        return { success: false, error: "Job description not found" }
       }
 
-      return data
+      return { success: true, data }
     } catch (error) {
-      console.error("Error in getJDById:", error)
-      return null
+      console.error("Error getting JD:", error)
+      return { success: false, error: error.message || "Failed to retrieve job description" }
     }
   }
 
-  static async getJDsByEmail(email?: string): Promise<JobDescription[]> {
-    const userEmail = email || stubUser.email
+  static async getAllJDs(limit = 30): Promise<{ success: boolean; data?: any[]; error?: string }> {
     try {
       const { data, error } = await supabase
         .from("job_descriptions")
         .select("*")
-        .eq("created_by_email", userEmail)
+        .eq("is_public", true)
         .order("created_at", { ascending: false })
+        .limit(limit)
 
-      if (error) {
-        console.error("Error getting JDs by email:", error)
-        return []
-      }
+      if (error) throw error
 
-      return data || []
+      return { success: true, data }
     } catch (error) {
-      console.error("Error in getJDsByEmail:", error)
-      return []
+      console.error("Error getting all JDs:", error)
+      return { success: false, error: error.message || "Failed to retrieve job descriptions" }
     }
   }
 
-  static async getAllJDs(): Promise<JobDescription[]> {
+  static async getUserJDs(userEmail: string): Promise<{ success: boolean; data?: any[]; error?: string }> {
     try {
       const { data, error } = await supabase
         .from("job_descriptions")
         .select("*")
+        .eq("user_email", userEmail)
         .order("created_at", { ascending: false })
 
-      if (error) {
-        console.error("Error getting all JDs:", error)
-        return []
-      }
+      if (error) throw error
 
-      return data || []
+      return { success: true, data }
     } catch (error) {
-      console.error("Error in getAllJDs:", error)
-      return []
+      console.error("Error getting user JDs:", error)
+      return { success: false, error: error.message || "Failed to retrieve user job descriptions" }
     }
   }
 
-  static async updateJD(
-    id: string,
-    jdData: Partial<JobDescription>,
-    userEmail?: string,
-  ): Promise<JobDescription | null> {
-    const email = userEmail || stubUser.email
+  static async deleteJD(id: string, userEmail?: string): Promise<{ success: boolean; error?: string }> {
     try {
-      const { data, error } = await supabase
+      // Get JD details before deletion for history
+      const { data: jdData, error: getError } = await supabase
         .from("job_descriptions")
-        .update({
-          ...jdData,
-          updated_at: new Date().toISOString(),
-        })
+        .select("title, user_email")
         .eq("id", id)
-        .select()
         .single()
 
-      if (error) {
-        console.error("Error updating JD:", error)
-        return null
+      if (getError) {
+        return { success: false, error: "Job description not found" }
       }
 
-      return data
+      // If user email is provided, verify ownership
+      if (userEmail && jdData.user_email !== userEmail) {
+        return { success: false, error: "You do not have permission to delete this job description" }
+      }
+
+      const supabaseAdmin = getSupabaseAdmin()
+      const { error: deleteError } = await supabaseAdmin.from("job_descriptions").delete().eq("id", id)
+
+      if (deleteError) throw deleteError
+
+      // Log the delete action
+      await this.logUserAction(userEmail, "delete", "job_description", id, { title: jdData?.title })
+
+      return { success: true }
     } catch (error) {
-      console.error("Error in updateJD:", error)
-      return null
+      console.error("Error deleting JD:", error)
+      return { success: false, error: error.message || "Failed to delete job description" }
     }
   }
 
-  static async deleteJD(id: string): Promise<boolean> {
+  static async getTemplates(): Promise<{ success: boolean; data?: any[]; error?: string }> {
     try {
-      const { error } = await supabase.from("job_descriptions").delete().eq("id", id)
+      const { data, error } = await supabase.from("job_descriptions").select("*").eq("is_template", true)
 
-      if (error) {
-        console.error("Error deleting JD:", error)
-        return false
-      }
+      if (error) throw error
 
-      return true
+      return { success: true, data }
     } catch (error) {
-      console.error("Error in deleteJD:", error)
-      return false
+      console.error("Error getting templates:", error)
+      return { success: false, error: error.message || "Failed to retrieve templates" }
     }
   }
 
-  static async trackUserActivity(userEmail: string, action: string, details: string): Promise<boolean> {
+  static async getUserHistory(userEmail: string): Promise<{ success: boolean; data?: any[]; error?: string }> {
     try {
-      const { error } = await supabase.from("user_activity").insert({
-        user_email: userEmail,
+      const { data, error } = await supabase
+        .from("user_history")
+        .select("*")
+        .eq("user_email", userEmail)
+        .order("created_at", { ascending: false })
+        .limit(50)
+
+      if (error) throw error
+
+      return { success: true, data }
+    } catch (error) {
+      console.error("Error getting user history:", error)
+      return { success: false, error: error.message || "Failed to retrieve user history" }
+    }
+  }
+
+  static async getAllHistory(limit = 50): Promise<{ success: boolean; data?: any[]; error?: string }> {
+    try {
+      const supabaseAdmin = getSupabaseAdmin()
+      const { data, error } = await supabaseAdmin.rpc("get_history_with_names", { limit_count: limit })
+
+      if (error) throw error
+
+      return { success: true, data }
+    } catch (error) {
+      console.error("Error getting all history:", error)
+      return { success: false, error: error.message || "Failed to retrieve history" }
+    }
+  }
+
+  private static async logUserAction(
+    userEmail: string | undefined | null,
+    action: string,
+    resourceType: string,
+    resourceId: string | null,
+    metadata: Record<string, any> | null,
+  ): Promise<void> {
+    try {
+      const supabaseAdmin = getSupabaseAdmin()
+      const { error } = await supabaseAdmin.from("user_history").insert({
+        user_email: userEmail || null,
         action,
-        details,
+        resource_type: resourceType,
+        resource_id: resourceId,
+        metadata,
         created_at: new Date().toISOString(),
       })
 
-      if (error) {
-        console.error("Error tracking user activity:", error)
-        return false
-      }
-
-      return true
+      if (error) throw error
     } catch (error) {
-      console.error("Error in trackUserActivity:", error)
-      return false
+      console.error("Failed to log user action:", error)
+      // Don't throw here to prevent disrupting the main operation
     }
   }
 }

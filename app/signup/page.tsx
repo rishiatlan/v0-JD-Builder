@@ -1,13 +1,12 @@
+export const dynamic = "force-dynamic"
+
 import { AtlanHeader } from "@/components/atlan-header"
 import { AtlanFooter } from "@/components/atlan-footer"
-import { LoginForm } from "@/components/auth/login-form"
+import { SignupForm } from "@/components/auth/signup-form"
 import { getSession } from "@/lib/session"
 import { redirect } from "next/navigation"
 
-// Mark this page as dynamic since it uses cookies
-export const dynamic = "force-dynamic"
-
-export default async function LoginPage() {
+export default async function SignupPage() {
   // Check if user is already logged in
   const session = await getSession()
 
@@ -19,9 +18,9 @@ export default async function LoginPage() {
     <div className="min-h-screen flex flex-col bg-slate-50">
       <AtlanHeader />
       <main className="flex-1 container mx-auto px-4 py-8">
-        <h1 className="text-3xl md:text-4xl font-bold text-center text-atlan-primary mb-8">Sign In</h1>
+        <h1 className="text-3xl md:text-4xl font-bold text-center text-atlan-primary mb-8">Create an Account</h1>
         <div className="max-w-md mx-auto">
-          <LoginForm />
+          <SignupForm />
         </div>
       </main>
       <AtlanFooter />

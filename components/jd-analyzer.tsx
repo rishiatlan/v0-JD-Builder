@@ -4,7 +4,6 @@ import type React from "react"
 
 import { useState, useEffect, useCallback, Suspense } from "react"
 import { checkJDForBias } from "@/app/actions"
-import { saveJobDescription } from "@/app/actions/saveJobDescription"
 import { useToast } from "@/components/ui/use-toast"
 import { useSearchParams } from "next/navigation"
 import { JDService } from "@/lib/jd-service"
@@ -22,6 +21,8 @@ import { Download, Save } from "lucide-react"
 // Add import for the PDF utilities
 import { jdToHtml, jdToText } from "@/lib/pdf-utils"
 import { generateWordDocument } from "@/lib/docx-utils"
+// First, add the import for the sanitizeJD function
+import { sanitizeJD } from "@/lib/text-sanitizer"
 
 const SearchParamsComponent = ({ children }: { children: (searchParams: URLSearchParams) => React.ReactNode }) => {
   const searchParams = useSearchParams()
@@ -36,8 +37,6 @@ export function JDAnalyzer() {
   const [isSaving, setIsSaving] = useState<boolean>(false)
   const [showEmailDialog, setShowEmailDialog] = useState<boolean>(false)
   const [userEmail, setUserEmail] = useState<string>("")
-  const [saveError, setSaveError] = useState<string | null>(null)
-  const [saveSuccess, setSaveSuccess] = useState<boolean>(false)
   const { toast } = useToast()
   const { authState } = useAuth()
   const [exportFormat, setExportFormat] = useState<"txt" | "pdf" | "docx">("txt")
@@ -114,15 +113,7 @@ export function JDAnalyzer() {
 
   const handleRefinementComplete = useCallback(
     async (refinedData: any) => {
-      // Show loading state immediately
       setIsAnalyzing(true)
-
-      // Immediately update the UI with the refined data
-      // This gives users instant feedback that their action was registered
-      setJdData({
-        ...jdData,
-        ...refinedData,
-      })
 
       try {
         // Get all content as a single string for bias checking
@@ -138,12 +129,6 @@ export function JDAnalyzer() {
         // Check for bias in chunks to avoid overloading the API
         let biasFlags = []
         try {
-          // Show toast to indicate processing
-          toast({
-            title: "Processing",
-            description: "Checking for bias in your job description...",
-          })
-
           const biasResult = await checkJDForBias(allContent)
           if (biasResult.success) {
             biasFlags = biasResult.biasFlags || []
@@ -156,12 +141,15 @@ export function JDAnalyzer() {
           // Continue without bias check results
         }
 
-        // Update JD data with refined content and bias flags
-        setJdData((prevData) => ({
-          ...prevData,
-          ...refinedData,
+        // Sanitize the refined data to remove any years of experience requirements
+        const sanitizedData = sanitizeJD(refinedData)
+
+        // Update JD data with sanitized refined content and bias flags
+        setJdData({
+          ...jdData,
+          ...sanitizedData,
           biasFlags,
-        }))
+        })
 
         // Track refinement completion
         analytics.track("jd_refinement_completed", {
@@ -171,12 +159,6 @@ export function JDAnalyzer() {
 
         // Move to next step
         setActiveStep(3)
-
-        // Show success toast
-        toast({
-          title: "Success",
-          description: "Your job description has been finalized!",
-        })
       } catch (error) {
         console.error("Error during refinement completion:", error)
         toast({
@@ -186,10 +168,10 @@ export function JDAnalyzer() {
         })
 
         // Still update the data and proceed even if there was an error
-        setJdData((prevData) => ({
-          ...prevData,
+        setJdData({
+          ...jdData,
           ...refinedData,
-        }))
+        })
         setActiveStep(3)
       } finally {
         setIsAnalyzing(false)
@@ -228,11 +210,7 @@ export function JDAnalyzer() {
 
   const saveJDWithEmail = useCallback(
     async (email: string) => {
-      if (!jdData) return
-
       setIsSaving(true)
-      setSaveError(null)
-      setSaveSuccess(false)
       setShowEmailDialog(false)
 
       try {
@@ -244,27 +222,32 @@ export function JDAnalyzer() {
           is_public: true, // Default to public
         }
 
-        // Use the server action to save the JD
-        const result = await saveJobDescription(jdToSave)
+        const { success, data, error } = await JDService.saveJD(jdToSave)
 
-        setSaveSuccess(true)
-        toast({
-          title: "Success",
-          description: "Job description saved successfully!",
-        })
+        if (success) {
+          toast({
+            title: "Success",
+            description: "Job description saved successfully!",
+          })
 
-        // Track save event
-        analytics.track("jd_saved", {
-          id: result.data?.id,
-          title: jdData.title,
-          userEmail: email,
-        })
+          // Track save event
+          analytics.track("jd_saved", {
+            id: data?.id,
+            title: jdData.title,
+            userEmail: email,
+          })
+        } else {
+          toast({
+            title: "Error",
+            description: error || "Failed to save job description",
+            variant: "destructive",
+          })
+        }
       } catch (error) {
         console.error("Error saving JD:", error)
-        setSaveError(error.message || "Failed to save job description")
         toast({
           title: "Error",
-          description: error.message || "Failed to save job description",
+          description: "An unexpected error occurred while saving",
           variant: "destructive",
         })
       } finally {
@@ -377,7 +360,7 @@ export function JDAnalyzer() {
               <JDAnalysis data={jdData} />
             </div>
             <div className="lg:col-span-2">
-              <JDRefinement data={jdData} onComplete={handleRefinementComplete} isLoading={isAnalyzing} />
+              <JDRefinement data={jdData} onComplete={handleRefinementComplete} />
             </div>
           </div>
         )
@@ -419,16 +402,6 @@ export function JDAnalyzer() {
                 {isSaving ? "Saving..." : "Save JD"}
               </Button>
             </div>
-
-            {saveSuccess && (
-              <div className="p-3 bg-green-50 border border-green-200 rounded-md text-green-600">
-                Job description saved successfully!
-              </div>
-            )}
-
-            {saveError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-md text-red-600">{saveError}</div>
-            )}
 
             <JDOutput data={jdData} />
           </div>

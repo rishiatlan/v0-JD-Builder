@@ -1,9 +1,0 @@
-app/api/auth/signup/route.ts
-app/api/auth/signin/route.ts
-app/signup/page.tsx
-app/forgot-password/page.tsx
-app/reset-password/page.tsx
-app/reset-password/loading.tsx
-components/auth/signup-form.tsx
-components/auth/login-form.tsx
-db/migrations/add_password_reset.sql

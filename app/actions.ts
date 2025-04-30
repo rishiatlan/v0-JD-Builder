@@ -1,33 +1,7 @@
 "use server"
 
 import { generateAtlanJD, getRefinementSuggestions, checkForBias, generateWithGemini } from "@/lib/openhands"
-
-// Add this function to sanitize years of experience phrases
-function sanitizeYearsOfExperience(text: string): string {
-  if (!text) return text
-
-  const bannedPatterns = [
-    /(\d+)\+?\s*years? of experience/gi,
-    /at least (\d+)\s*years/gi,
-    /minimum of (\d+)\s*years/gi,
-    /(\d+)\+?\s*years? in/gi,
-    /experience of (\d+)\+?\s*years/gi,
-  ]
-
-  const replacements = ["proven experience", "demonstrated ability", "track record", "solid background", "proficiency"]
-
-  let sanitizedText = text
-
-  for (const pattern of bannedPatterns) {
-    sanitizedText = sanitizedText.replace(pattern, () => {
-      // Get a random replacement phrase
-      const replacement = replacements[Math.floor(Math.random() * replacements.length)]
-      return replacement
-    })
-  }
-
-  return sanitizedText
-}
+import { sanitizeJD } from "@/lib/text-sanitizer"
 
 // Server action to generate a JD based on intake form data
 export async function generateJD(formData: FormData) {
@@ -70,39 +44,19 @@ export async function generateJD(formData: FormData) {
         }
       }
 
-      // Additional sanitization at the server action level as a safety net
-      if (jdData.sections) {
-        // Sanitize overview
-        if (jdData.sections.overview) {
-          jdData.sections.overview = sanitizeYearsOfExperience(jdData.sections.overview)
-        }
-
-        // Sanitize responsibilities
-        if (Array.isArray(jdData.sections.responsibilities)) {
-          jdData.sections.responsibilities = jdData.sections.responsibilities.map((item) =>
-            sanitizeYearsOfExperience(item),
-          )
-        } else if (jdData.sections.responsibilities) {
-          jdData.sections.responsibilities = sanitizeYearsOfExperience(jdData.sections.responsibilities)
-        }
-
-        // Sanitize qualifications
-        if (Array.isArray(jdData.sections.qualifications)) {
-          jdData.sections.qualifications = jdData.sections.qualifications.map((item) => sanitizeYearsOfExperience(item))
-        } else if (jdData.sections.qualifications) {
-          jdData.sections.qualifications = sanitizeYearsOfExperience(jdData.sections.qualifications)
-        }
-      }
-
       console.log("JD generated successfully:", Object.keys(jdData))
 
-      // Return the generated JD data
+      // Sanitize the JD to remove any years of experience requirements
+      const sanitizedJD = sanitizeJD(jdData)
+      console.log("JD sanitized to remove years of experience requirements")
+
+      // Return the sanitized JD data
       return {
         success: true,
         data: {
           title: data.title,
           department: data.department,
-          ...jdData,
+          ...sanitizedJD,
         },
       }
     } catch (error) {
@@ -307,12 +261,16 @@ export async function analyzeUploadedDocument(fileContent: string) {
 
       console.log("JD generated successfully from document:", Object.keys(jdData))
 
+      // Sanitize the JD to remove any years of experience requirements
+      const sanitizedJD = sanitizeJD(jdData)
+      console.log("JD sanitized to remove years of experience requirements")
+
       return {
         success: true,
         data: {
           title: parsedInfo.title,
           department: parsedInfo.department,
-          ...jdData,
+          ...sanitizedJD,
         },
       }
     } catch (error) {

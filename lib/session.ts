@@ -35,9 +35,9 @@ export async function createSession(user: { id: string; email: string }): Promis
       RETURNING id
     `
 
-    // Session expires in 24 hours (changed from 7 days)
+    // Session expires in 7 days
     const expiresAt = new Date()
-    expiresAt.setHours(expiresAt.getHours() + 24)
+    expiresAt.setDate(expiresAt.getDate() + 7)
 
     await query(insertQuery, [user.id, hashedToken, expiresAt.toISOString()])
 
@@ -46,7 +46,7 @@ export async function createSession(user: { id: string; email: string }): Promis
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 24 * 60 * 60, // 24 hours in seconds (changed from 7 days)
+      maxAge: 7 * 24 * 60 * 60, // 7 days
       path: "/",
     })
 
