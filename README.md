@@ -1,51 +1,56 @@
-# Atlan JD Builder
+# JD Builder (Beta)
 
-![Atlan Logo](public/images/atlan-logo.png)
+A powerful tool for creating, enhancing, and analyzing job descriptions using AI-powered language processing.
 
-## GitHub Repository
+## 🚀 Overview
 
-This project is available on GitHub at: [https://github.com/rishiatlan/v0-JD-Builder](https://github.com/rishiatlan/v0-JD-Builder)
+JD Builder helps talent acquisition teams and hiring managers create high-quality job descriptions through:
 
-## Overview
+- Dynamic questionnaires that capture key role requirements
+- Document parsing and analysis of existing JDs
+- AI-powered enhancement of job descriptions
+- Memory-optimized processing of large documents
+- Background worker processing for improved performance
 
-Atlan JD Builder is a powerful tool designed to help create world-class job descriptions that follow Atlan's standards of excellence. This application leverages AI to generate, analyze, and refine job descriptions that attract top talent while maintaining Atlan's unique voice and values.
+## ✨ Key Features
 
-## Features
+- **Dynamic Questionnaire**: Generate JDs by answering targeted questions about the role
+- **Document Upload**: Parse and analyze existing JDs from PDF, DOCX, or TXT files
+- **JD Enhancement**: Improve existing JDs with AI-powered language processing
+- **Memory Optimization**: Handle large documents efficiently without browser crashes
+- **Worker Pool**: Process documents in the background for better UI responsiveness
 
-- **AI-Powered JD Generation**: Create professional job descriptions using Gemini AI based on key role information
-- **Document Upload**: Extract information from existing documents to jumpstart the JD creation process
-- **Client-Side Document Parsing**: Parse PDF, DOCX, and TXT files entirely in the browser for speed and privacy
-- **Bias Detection**: Automatically identify and suggest alternatives for potentially biased or non-inclusive language
-- **Interactive Refinement**: Get AI-powered suggestions to improve each section of your job description
-- **Atlan Voice Check**: Ensure your JD aligns with Atlan's strategic, inspirational, and mission-driven voice
-- **Template Library**: Start with pre-built templates for common roles to save time
-- **Download & Export**: Save your finalized JD in a clean, formatted text file
-- **Supabase Integration**: Store and retrieve job descriptions with Supabase
+## 🛠️ Technical Architecture
 
-## Technology Stack
+### Core Components
 
-- **Frontend**: Next.js, React, TypeScript, Tailwind CSS
-- **UI Components**: shadcn/ui
-- **AI Integration**: Google's Gemini 2.0 Flash model via OpenHands
-- **Document Parsing**: pdf.js (PDF), mammoth.js (DOCX), and native FileReader (TXT)
-- **Database**: Supabase
-- **Styling**: Tailwind CSS with custom Atlan theming
+- **JD Builder Form**: Main interface for creating and enhancing JDs
+- **Document Parser**: Processes uploaded documents with memory optimization
+- **Language Processor**: AI-powered text analysis and enhancement
+- **Worker Pool**: Background processing for CPU-intensive tasks
+- **Memory Optimization**: Utilities for handling large documents efficiently
 
-## Getting Started
+### Technology Stack
+
+- Next.js (App Router)
+- React with TypeScript
+- Tailwind CSS for styling
+- Web Workers for background processing
+- AI integration for language processing
+
+## 🔧 Development Setup
 
 ### Prerequisites
 
-- Node.js 18.x or higher
-- npm or yarn
-- Gemini API key
-- Supabase project
+- Node.js 16+ and npm/yarn
+- Git
 
 ### Installation
 
 1. Clone the repository:
    \`\`\`bash
-   git clone https://github.com/rishiatlan/v0-JD-Builder.git
-   cd v0-JD-Builder
+   git clone https://github.com/your-org/jd-builder.git
+   cd jd-builder
    \`\`\`
 
 2. Install dependencies:
@@ -56,13 +61,10 @@ Atlan JD Builder is a powerful tool designed to help create world-class job desc
    \`\`\`
 
 3. Set up environment variables:
-   Create a `.env.local` file in the root directory with the following:
+   \`\`\`bash
+   cp .env.example .env.local
    \`\`\`
-   GEMINI_API_KEY=your_gemini_api_key_here
-   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-   SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
-   \`\`\`
+   Then edit `.env.local` with your API keys and configuration.
 
 4. Run the development server:
    \`\`\`bash
@@ -71,78 +73,85 @@ Atlan JD Builder is a powerful tool designed to help create world-class job desc
    yarn dev
    \`\`\`
 
-5. Open [http://localhost:3000](http://localhost:3000) in your browser to see the application.
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### Deployment Notes
+## 🧪 Quality Assurance
 
-When deploying to Vercel or other platforms, ensure that:
+### Code Quality Tools
 
-1. All dependencies in package.json are properly formatted as package names, not URLs
-2. The project uses the correct Node.js version (16.x or higher)
-3. Environment variables are properly set in the deployment platform
+- **ESLint**: Static code analysis with TypeScript-specific rules
+- **Prettier**: Code formatting
+- **TypeScript**: Static type checking
+- **Husky**: Pre-commit hooks for code quality checks
 
-### Troubleshooting Deployment Issues
+### Running Quality Checks
 
-If you encounter the following error during deployment:
+\`\`\`bash
+# Lint code
+npm run lint
+# or
+yarn lint
+
+# Fix linting issues automatically
+npm run lint:fix
+# or
+yarn lint:fix
+
+# Type check
+npm run type-check
+# or
+yarn type-check
 \`\`\`
-ERR_PNPM_FETCH_404  GET https://registry.npmjs.org/https%3A: Not Found - 404
+
+## 📚 Documentation
+
+### Component Documentation
+
+- **JD Builder Form**: Main form component with tabs for questionnaire, upload, and enhance
+- **Document Parser**: Handles document parsing with memory optimization
+- **Progressive Document Preview**: Renders large documents efficiently
+
+### Utility Documentation
+
+- **Memory Optimization**: Utilities for handling large documents
+- **Worker Pool**: Background processing for CPU-intensive tasks
+- **Language Processor**: AI-powered text analysis
+
+## 🔍 Troubleshooting
+
+### Common Issues
+
+- **Memory Issues**: If you encounter memory issues with large documents, try:
+  - Breaking the document into smaller chunks
+  - Using a different browser (Chrome tends to handle memory better)
+  - Closing other browser tabs to free up memory
+
+- **Worker Pool Issues**: If background processing isn't working:
+  - Check if your browser supports Web Workers
+  - Ensure you're not in a private/incognito window (some browsers limit Web Worker functionality)
+
+- **Deployment Errors**: For syntax errors during deployment:
+  - Run `npm run lint` and `npm run type-check` to catch issues before deployment
+  - Check for unbalanced tags or syntax errors in TypeScript files
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create your feature branch: `git checkout -b feature/amazing-feature`
+3. Commit your changes: `git commit -m 'Add some amazing feature'`
+4. Push to the branch: `git push origin feature/amazing-feature`
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 📝 Recent Changes
+
+### Dependency Cleanup (2023-05-06)
+- Removed Supabase dependencies as they were not being used in the application
+- Cleaned up related environment variables
+- Simplified the project dependencies
 \`\`\`
 
-This typically indicates an issue with the package.json file. Ensure that:
-
-1. All dependencies are specified as package names, not URLs
-2. There are no typos in package names
-3. All packages exist in the npm registry
-4. No import statements are using URLs as package names
-5. Check for any hidden dependencies in configuration files
-
-For Vercel deployments specifically:
-1. Make sure the Node.js version is set correctly (16.x or higher)
-2. Verify all environment variables are properly set in the Vercel dashboard
-3. Consider using the Vercel CLI to debug deployment issues locally
-4. Check the build logs for any specific package that's causing the error
-
-If the issue persists:
-1. Try clearing the Vercel cache and redeploying
-2. Consider using npm instead of pnpm for the installation
-3. Create a fresh package-lock.json file locally and commit it
-
-For Supabase Edge Functions, make sure:
-1. All imports use the correct Deno URL format
-2. Environment variables are properly set in the Supabase dashboard
-3. The function has the necessary permissions
-
-## Usage Guide
-
-### Creating a New JD
-
-1. Navigate to the JD Builder homepage
-2. Choose between the questionnaire or document upload option
-3. Fill in the required information about the role
-4. Submit to generate an initial JD draft
-
-### Using Document Upload
-
-1. Select the "Upload Document" tab
-2. Click "Select File" to choose a PDF, DOCX, or TXT file
-3. Wait for the document to be parsed (all parsing happens in your browser)
-4. Click "Preview" to verify the extracted content
-5. Click "Analyze Document" to generate a JD based on the document content
-
-### Refining Your JD
-
-1. Review the analysis of your JD for clarity, inclusivity, SEO, and talent attraction
-2. Use the refinement tool to improve each section
-3. Apply AI-powered suggestions to enhance the content
-4. Finalize your JD when satisfied with all sections
-
-### Using Templates
-
-1. Navigate to the Templates page
-2. Select a template that matches your role requirements
-3. Customize the pre-filled information as needed
-4. Generate and refine your JD
-
-## Contact
-
-For questions or support, please contact the Talent Team at Atlan.
+Let's create a documentation file about the dependency cleanup:

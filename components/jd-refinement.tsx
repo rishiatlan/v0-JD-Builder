@@ -841,7 +841,17 @@ export function JDRefinement({
                           ) : (
                             <Button
                               size="sm"
-                              onClick={() => handleApplySuggestion(suggestion)}
+                              onClick={() => {
+                                // Prepare final data with all refinements
+                                const finalData = {
+                                  ...data,
+                                  // Include any additional refinements or changes
+                                  finalizedAt: new Date().toISOString(),
+                                }
+
+                                // Call the onComplete function with the finalized data
+                                onComplete(finalData)
+                              }}
                               className="bg-atlan-primary hover:bg-atlan-primary-dark"
                             >
                               Apply Suggestion
@@ -865,7 +875,27 @@ export function JDRefinement({
 
         <div className="mt-6 flex justify-end">
           <Button
-            onClick={handleFinalize}
+            onClick={() => {
+              // Prepare final data with all refinements
+              const finalData = {
+                ...data,
+                sections: {
+                  ...sections,
+                },
+                // Include any additional refinements or changes
+                finalizedAt: new Date().toISOString(),
+                refinementMetadata: {
+                  appliedSuggestions,
+                  refinedSegments,
+                  lastModified: Date.now(),
+                  sharpnessScores,
+                  improvementSuggestions,
+                },
+              }
+
+              // Call the onComplete function with the finalized data
+              onComplete(finalData)
+            }}
             className="bg-atlan-primary hover:bg-atlan-primary-dark text-white"
             disabled={isLoading}
           >
