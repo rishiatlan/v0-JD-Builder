@@ -13,7 +13,16 @@ export function JDOutput({ data }: JDOutputProps) {
   }
 
   // Destructure with default values to prevent further errors
-  const { title = "Job Title", department = "Department", sections = {}, refinementMetadata = {} } = data
+  const {
+    title = "Job Title",
+    department = "Department",
+    sections = {},
+    refinementMetadata = {},
+    includeStrategicVision = true,
+  } = data
+
+  // Log the data for debugging purposes
+  console.log("JD Output Data:", { title, department, sections, refinementMetadata })
 
   const renderList = (items: string[] | string) => {
     if (!items) return <p className="mb-4">No items available</p>
@@ -37,7 +46,7 @@ export function JDOutput({ data }: JDOutputProps) {
   const formattedStartDate = startDate.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })
 
   // Check if we should include strategic vision
-  const includeStrategicVision = data.includeStrategicVision !== false
+  // const includeStrategicVision = data.includeStrategicVision !== false
 
   // Get overall sharpness score if available
   const getOverallSharpnessScore = () => {
