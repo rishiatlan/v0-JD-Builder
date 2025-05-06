@@ -20,8 +20,8 @@ The worker pool is automatically initialized when the application starts:
 \`\`\`typescript
 // Get the worker pool instance
 const workerPool = getWorkerPool({
-  maxDocumentWorkers: 2,
-  maxTextWorkers: 2,
+ maxDocumentWorkers: 2,
+ maxTextWorkers: 2,
 });
 
 // Initialize the pool
@@ -36,30 +36,30 @@ To process text in the background:
 import useWorkerPool from "@/hooks/use-worker-pool";
 
 function MyComponent() {
-  const { processText } = useWorkerPool();
-  
-  const handleProcessText = () => {
-    processText(
-      largeText,
-      chunkSize,
-      {
-        priority: TaskPriority.NORMAL,
-        onProgress: (progress, stage) => {
-          setProgress(progress);
-          setStage(stage);
-        },
-        onComplete: (processedText) => {
-          setResult(processedText);
-        },
-        onError: (error) => {
-          setError(error);
-          // Fall back to main thread processing
-        },
-      }
-    );
-  };
-  
-  return (/* ... */);
+ const { processText } = useWorkerPool();
+ 
+ const handleProcessText = () => {
+   processText(
+     largeText,
+     chunkSize,
+     {
+       priority: TaskPriority.NORMAL,
+       onProgress: (progress, stage) => {
+         setProgress(progress);
+         setStage(stage);
+       },
+       onComplete: (processedText) => {
+         setResult(processedText);
+       },
+       onError: (error) => {
+         setError(error);
+         // Fall back to main thread processing
+       },
+     }
+   );
+ };
+ 
+ return (/* ... */);
 }
 \`\`\`
 
@@ -71,34 +71,34 @@ To enhance text with AI processing:
 import useWorkerPool from "@/hooks/use-worker-pool";
 
 function MyComponent() {
-  const { enhanceText } = useWorkerPool();
-  
-  const handleEnhanceText = () => {
-    enhanceText(
-      text,
-      {
-        removeRedundancy: true,
-        enhanceLanguage: true,
-        convertPassiveToActive: true,
-        removeIntensifiers: true,
-      },
-      {
-        priority: TaskPriority.HIGH,
-        onProgress: (progress, stage) => {
-          setProgress(progress);
-          setStage(stage);
-        },
-        onComplete: (enhancedText) => {
-          setResult(enhancedText);
-        },
-        onError: (error) => {
-          setError(error);
-        },
-      }
-    );
-  };
-  
-  return (/* ... */);
+ const { enhanceText } = useWorkerPool();
+ 
+ const handleEnhanceText = () => {
+   enhanceText(
+     text,
+     {
+       removeRedundancy: true,
+       enhanceLanguage: true,
+       convertPassiveToActive: true,
+       removeIntensifiers: true,
+     },
+     {
+       priority: TaskPriority.HIGH,
+       onProgress: (progress, stage) => {
+         setProgress(progress);
+         setStage(stage);
+       },
+       onComplete: (enhancedText) => {
+         setResult(enhancedText);
+       },
+       onError: (error) => {
+         setError(error);
+       },
+     }
+   );
+ };
+ 
+ return (/* ... */);
 }
 \`\`\`
 
@@ -110,32 +110,32 @@ To monitor the worker pool status:
 import useWorkerPool from "@/hooks/use-worker-pool";
 
 function MyComponent() {
-  const { getPoolStatus } = useWorkerPool();
-  const [poolStatus, setPoolStatus] = useState(null);
-  
-  useEffect(() => {
-    const updateStatus = () => {
-      setPoolStatus(getPoolStatus());
-    };
-    
-    // Update immediately
-    updateStatus();
-    
-    // Then update every second
-    const interval = setInterval(updateStatus, 1000);
-    
-    return () => clearInterval(interval);
-  }, [getPoolStatus]);
-  
-  return (
-    <div>
-      <h3>Worker Pool Status</h3>
-      <p>Document Workers: {poolStatus?.workers.document.busy}/{poolStatus?.workers.document.total}</p>
-      <p>Text Workers: {poolStatus?.workers.text.busy}/{poolStatus?.workers.text.total}</p>
-      <p>Queued Tasks: {poolStatus?.tasks.queued}</p>
-      <p>Running Tasks: {poolStatus?.tasks.running}</p>
-    </div>
-  );
+ const { getPoolStatus } = useWorkerPool();
+ const [poolStatus, setPoolStatus] = useState(null);
+ 
+ useEffect(() => {
+   const updateStatus = () => {
+     setPoolStatus(getPoolStatus());
+   };
+   
+   // Update immediately
+   updateStatus();
+   
+   // Then update every second
+   const interval = setInterval(updateStatus, 1000);
+   
+   return () => clearInterval(interval);
+ }, [getPoolStatus]);
+ 
+ return (
+   <div>
+     <h3>Worker Pool Status</h3>
+     <p>Document Workers: {poolStatus?.workers.document.busy}/{poolStatus?.workers.document.total}</p>
+     <p>Text Workers: {poolStatus?.workers.text.busy}/{poolStatus?.workers.text.total}</p>
+     <p>Queued Tasks: {poolStatus?.tasks.queued}</p>
+     <p>Running Tasks: {poolStatus?.tasks.running}</p>
+   </div>
+ );
 }
 \`\`\`
 

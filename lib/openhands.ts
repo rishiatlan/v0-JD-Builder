@@ -1,5 +1,5 @@
-// This is a placeholder for the actual OpenHands library implementation
-// In a real implementation, this would connect to the Gemini API directly
+// OpenHands library implementation
+// Connects to the Gemini API for AI-powered JD generation and enhancement
 
 export async function generateWithGemini(prompt: string): Promise<string> {
   try {

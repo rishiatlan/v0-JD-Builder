@@ -9,7 +9,7 @@ import { JDOutput } from "@/components/jd-output"
 import { EnhancedJDSummary } from "@/components/enhanced-jd-summary"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertTriangle } from "lucide-react"
-import { toast } from "@/components/ui/use-toast"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function BuilderPage() {
   const [step, setStep] = useState(1)
@@ -18,6 +18,7 @@ export default function BuilderPage() {
   const [isEnhanced, setIsEnhanced] = useState(false)
   const [warning, setWarning] = useState<string | null>(null)
   const searchParams = useSearchParams()
+  const { toast } = useToast()
 
   useEffect(() => {
     // Check if we're coming from an enhanced JD
@@ -61,22 +62,30 @@ export default function BuilderPage() {
   const handleRefinementComplete = (data: any) => {
     console.log("Refinement complete with data:", data)
 
-    // Store the finalized JD data in session storage for persistence
-    const jdId = `jd_${Date.now()}`
-    sessionStorage.setItem(`finalized_jd_${jdId}`, JSON.stringify(data))
+    try {
+      // Store the finalized JD data in session storage for persistence
+      const jdId = `jd_${Date.now()}`
+      sessionStorage.setItem(`finalized_jd_${jdId}`, JSON.stringify(data))
 
-    // Update the state with the finalized data
-    setJdData(data)
+      // Update the state with the finalized data
+      setJdData(data)
 
-    // Move to the final step
-    setStep(3)
+      // Move to the final step
+      setStep(3)
 
-    // Show success notification
-    toast({
-      title: "JD Finalized Successfully",
-      description: "Your job description has been finalized and is ready for review.",
-      variant: "success",
-    })
+      // Show success notification
+      toast({
+        title: "JD Finalized Successfully",
+        description: "Your job description has been finalized and is ready for review.",
+      })
+    } catch (error) {
+      console.error("Error finalizing JD:", error)
+      toast({
+        title: "Error Finalizing JD",
+        description: "There was a problem finalizing your job description. Please try again.",
+        variant: "destructive",
+      })
+    }
   }
 
   return (

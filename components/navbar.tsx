@@ -16,22 +16,21 @@ export function Navbar() {
             <Link href="/" className="text-slate-800 font-medium">
               JD Builder
             </Link>
-            <Link href="/history" className="text-slate-600 hover:text-slate-800">
-              History
+            <Link href="/standards" className="text-slate-600 hover:text-slate-800">
+              JD Standards
             </Link>
-            <Link href="/templates" className="text-slate-600 hover:text-slate-800">
-              Templates
-            </Link>
-            <Link href="/repository" className="text-slate-600 hover:text-slate-800">
+            <Link
+              href="https://github.com/rishiatlan/v0-JD-Builder/tree/main"
+              className="text-slate-600 hover:text-slate-800"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
               Repository
             </Link>
           </div>
         </div>
 
-        <div className="flex items-center space-x-4">
-          <Link href="/signin" className="text-slate-600 hover:text-slate-800">
-            Sign In
-          </Link>
+        <div className="flex items-center">
           <Button
             className="bg-atlan-primary hover:bg-atlan-primary-dark text-white"
             onClick={() => {

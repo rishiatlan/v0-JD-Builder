@@ -14,16 +14,16 @@ Processes a large string in smaller chunks to avoid memory issues:
 
 \`\`\`typescript
 const results = await processStringInChunks(
-  largeString,
-  5000, // chunk size
-  async (chunk, index) => {
-    // Process each chunk
-    return processedChunk;
-  },
-  (progress) => {
-    // Update progress (0-100)
-    setProgress(progress);
-  }
+ largeString,
+ 5000, // chunk size
+ async (chunk, index) => {
+   // Process each chunk
+   return processedChunk;
+ },
+ (progress) => {
+   // Update progress (0-100)
+   setProgress(progress);
+ }
 );
 \`\`\`
 
@@ -33,9 +33,9 @@ Checks if a string is too large to process at once:
 
 \`\`\`typescript
 if (isStringTooLarge(content.length)) {
-  // Process in chunks
+ // Process in chunks
 } else {
-  // Process directly
+ // Process directly
 }
 \`\`\`
 
@@ -72,14 +72,19 @@ largeObject = releaseMemory(largeObject);
 \`\`\`typescript
 // Check if content is too large
 if (isStringTooLarge(content.length)) {
-  // Process in chunks with memory monitoring
-  processContentInChunksWithMemoryCheck(content, 5000, (processedContent) => {
-    setContent(processedContent);
-    // Original content is automatically garbage collected
-  });
+ //
+
+\`\`\`typescript
+// Check if content is too large
+if (isStringTooLarge(content.length)) {
+ // Process in chunks with memory monitoring
+ processContentInChunksWithMemoryCheck(content, 5000, (processedContent) => {
+   setContent(processedContent);
+   // Original content is automatically garbage collected
+ });
 } else {
-  // For smaller content, process directly
-  setContent(content);
+ // For smaller content, process directly
+ setContent(content);
 }
 \`\`\`
 
@@ -100,6 +105,3 @@ If you encounter memory issues:
 2. Check Chrome DevTools Memory tab to identify memory leaks
 3. Ensure large objects are being properly released
 4. Consider reducing chunk sizes for processing
-\`\`\`
-
-Finally, let's create a documentation file for the worker pool:

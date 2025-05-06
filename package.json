@@ -58,14 +58,10 @@
     "tailwindcss-animate": "^1.0.7",
     "vaul": "^0.9.6",
     "zod": "^3.24.1",
-    "pdfjs-dist": "latest",
     "lodash.debounce": "latest",
     "mammoth": "latest",
-    "@tanstack/react-virtual": "latest",
-    "fs": "latest",
-    "path": "latest",
-    "util": "latest",
-    "child_process": "latest"
+    "pdfjs-dist": "latest",
+    "@tanstack/react-virtual": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

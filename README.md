@@ -48,30 +48,30 @@ JD Builder helps talent acquisition teams and hiring managers create high-qualit
 ### Installation
 
 1. Clone the repository:
-   \`\`\`bash
-   git clone https://github.com/your-org/jd-builder.git
-   cd jd-builder
-   \`\`\`
+  \`\`\`bash
+  git clone https://github.com/your-org/jd-builder.git
+  cd jd-builder
+  \`\`\`
 
 2. Install dependencies:
-   \`\`\`bash
-   npm install
-   # or
-   yarn install
-   \`\`\`
+  \`\`\`bash
+  npm install
+  # or
+  yarn install
+  \`\`\`
 
 3. Set up environment variables:
-   \`\`\`bash
-   cp .env.example .env.local
-   \`\`\`
-   Then edit `.env.local` with your API keys and configuration.
+  \`\`\`bash
+  cp .env.example .env.local
+  \`\`\`
+  Then edit `.env.local` with your API keys and configuration.
 
 4. Run the development server:
-   \`\`\`bash
-   npm run dev
-   # or
-   yarn dev
-   \`\`\`
+  \`\`\`bash
+  npm run dev
+  # or
+  yarn dev
+  \`\`\`
 
 5. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
@@ -122,17 +122,17 @@ yarn type-check
 ### Common Issues
 
 - **Memory Issues**: If you encounter memory issues with large documents, try:
-  - Breaking the document into smaller chunks
-  - Using a different browser (Chrome tends to handle memory better)
-  - Closing other browser tabs to free up memory
+ - Breaking the document into smaller chunks
+ - Using a different browser (Chrome tends to handle memory better)
+ - Closing other browser tabs to free up memory
 
 - **Worker Pool Issues**: If background processing isn't working:
-  - Check if your browser supports Web Workers
-  - Ensure you're not in a private/incognito window (some browsers limit Web Worker functionality)
+ - Check if your browser supports Web Workers
+ - Ensure you're not in a private/incognito window (some browsers limit Web Worker functionality)
 
 - **Deployment Errors**: For syntax errors during deployment:
-  - Run `npm run lint` and `npm run type-check` to catch issues before deployment
-  - Check for unbalanced tags or syntax errors in TypeScript files
+ - Run `npm run lint` and `npm run type-check` to catch issues before deployment
+ - Check for unbalanced tags or syntax errors in TypeScript files
 
 ## 🤝 Contributing
 
@@ -154,4 +154,11 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - Simplified the project dependencies
 \`\`\`
 
-Let's create a documentation file about the dependency cleanup:
+Let's restore the .env.example file:
+
+\`\`\`plaintext file=".env.example"
+# API Keys
+GEMINI_API_KEY=your-gemini-api-key
+
+# Application Settings
+NEXT_PUBLIC_APP_URL=http://localhost:3000

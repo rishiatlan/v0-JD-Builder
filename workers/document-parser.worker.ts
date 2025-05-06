@@ -78,7 +78,7 @@ async function parsePdf(fileData: ArrayBuffer): Promise<string> {
       const page = await pdf.getPage(i)
       const textContent = await page.getTextContent()
       const pageText = textContent.items.map((item: any) => item.str).join(" ")
-      fullText += pageText + "\n\n"
+      fullText += pageText + "\n"
 
       // Report progress
       const progress = Math.round((i / pdf.numPages) * 100)

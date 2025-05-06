@@ -15,17 +15,17 @@ After a thorough analysis of the codebase, we determined that Supabase was not b
 ### What Was Removed
 
 1. **Dependencies**:
-   - Removed `@supabase/supabase-js` from package.json
+  - Removed `@supabase/supabase-js` from package.json
 
 2. **Environment Variables**:
-   - Removed `NEXT_PUBLIC_SUPABASE_URL`
-   - Removed `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-   - Removed `SUPABASE_SERVICE_ROLE_KEY`
+  - Removed `NEXT_PUBLIC_SUPABASE_URL`
+  - Removed `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+  - Removed `SUPABASE_SERVICE_ROLE_KEY`
 
 3. **Code**:
-   - Removed any Supabase client initialization
-   - Removed imports from Supabase packages
-   - Removed any Supabase-related utility functions
+  - Removed any Supabase client initialization
+  - Removed imports from Supabase packages
+  - Removed any Supabase-related utility functions
 
 ### Benefits of Removal
 
@@ -62,4 +62,4 @@ To verify that Supabase has been completely removed:
 4. Run a search for "supabase" in the codebase to ensure no references remain
 \`\`\`
 
-Let's create a script to check for any remaining Supabase references after cleanup:
+Let's restore the package.json file:

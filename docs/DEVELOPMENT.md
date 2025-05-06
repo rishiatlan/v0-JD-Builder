@@ -9,21 +9,19 @@ jd-builder/
 ├── app/                  # Next.js App Router
 │   ├── actions.ts        # Server actions
 │   ├── builder/          # Builder page
+│   ├── standards/        # JD Standards page
 │   ├── layout.tsx        # Root layout
 │   └── page.tsx          # Home page
 ├── components/           # React components
 │   ├── ui/               # UI components
 │   ├── jd-builder-form.tsx  # Main form component
-│   ├── document-parser.tsx  # Document parsing
+│   ├── jd-refinement.tsx    # JD refinement component
+│   ├── jd-output.tsx        # JD output component
 │   └── ...
 ├── lib/                  # Utility functions
-│   ├── memory-optimization.ts  # Memory utilities
-│   ├── worker-pool.ts    # Worker pool management
-│   └── ...
-├── workers/              # Web Workers
-│   ├── document-parser.worker.ts  # Document parsing worker
-│   └── text-processor.worker.ts   # Text processing worker
-├── hooks/                # Custom React hooks
+│   ├── language-processor.ts  # Language processing utilities
+│   ├── openhands.ts          # AI integration
+│   └── department-data.ts    # Department data
 ├── public/               # Static assets
 └── ...
 \`\`\`
@@ -89,15 +87,6 @@ npm run prepare
 - Use proper prop typing with TypeScript interfaces
 - Follow the React hooks rules (no conditional hooks, etc.)
 
-#### Memory Optimization
-
-When working with large documents:
-
-- Use the `processStringInChunks` utility for processing large strings
-- Avoid keeping multiple copies of large strings in memory
-- Release references to large objects when no longer needed
-- Use the worker pool for CPU-intensive tasks
-
 #### Error Handling
 
 - Use try/catch blocks for async operations
@@ -105,21 +94,7 @@ When working with large documents:
 - Log errors for debugging purposes
 - Use fallback mechanisms when primary approaches fail
 
-### 4. Working with Web Workers
-
-The project uses Web Workers for background processing:
-
-- Document parsing workers handle file parsing
-- Text processing workers handle text analysis and enhancement
-- The worker pool manages worker creation and task distribution
-
-To add a new worker:
-
-1. Create a new worker file in the `workers/` directory
-2. Register the worker in `lib/worker-pool.ts`
-3. Use the worker pool to execute tasks
-
-### 5. Deployment
+### 4. Deployment
 
 The project is deployed using Vercel:
 
@@ -137,28 +112,8 @@ If you encounter linting or type errors:
 2. For TypeScript errors, check the error message for the file and line number
 3. Fix the issues manually if automatic fixing doesn't work
 
-### Memory Issues During Development
-
-If you encounter memory issues when testing with large documents:
-
-1. Use Chrome DevTools Memory tab to monitor memory usage
-2. Ensure you're using the memory optimization utilities
-3. Consider reducing the test document size during development
-
-### Worker Pool Issues
-
-If the worker pool isn't working correctly:
-
-1. Check browser console for errors
-2. Ensure the worker files are being properly bundled
-3. Try testing in a different browser
-
 ## Additional Resources
 
 - [Next.js Documentation](https://nextjs.org/docs)
 - [React Documentation](https://reactjs.org/docs)
 - [TypeScript Documentation](https://www.typescriptlang.org/docs)
-- [Web Workers API](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API)
-\`\`\`
-
-Let's also create a documentation file specifically for the memory optimization utilities:

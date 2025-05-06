@@ -5,18 +5,15 @@ import type React from "react"
 import { useState, useEffect, useRef, useCallback } from "react"
 import debounce from "lodash.debounce"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent } from "@/components/ui/tabs"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { RefreshCw, Loader2, Info, Star, Sparkles } from "lucide-react"
+import { CheckCircle, RefreshCw, Loader2, Info, Star, Sparkles } from "lucide-react"
 import { getSectionRefinements } from "@/app/actions"
 import { useToast } from "@/components/ui/use-toast"
 import { languageProcessor } from "@/lib/language-processor"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
-import { EnhancedButton } from "@/components/ui/button-enhancement"
-import { SuggestionCard } from "@/components/suggestion-card"
-import { SharpnessScore } from "@/components/sharpness-score"
-import { EnhancedTabs } from "@/components/enhanced-tabs"
 
 interface JDRefinementProps {
   data: any
@@ -60,6 +57,7 @@ export function JDRefinement({
   const [sharpnessScores, setSharpnessScores] = useState<Record<string, number>>({})
   const [improvementSuggestions, setImprovementSuggestions] = useState<Record<string, string[]>>({})
   const [processingResults, setProcessingResults] = useState<Record<string, any>>({})
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const { toast } = useToast()
 
   // Store original text for comparison
@@ -231,73 +229,69 @@ export function JDRefinement({
   }
 
   const handleFinalize = () => {
-    // Provide immediate visual feedback
-    const button = document.querySelector('button:contains("Finalize JD")')
-    if (button) {
-      button.classList.add("animate-pulse")
+    console.log("Finalize button clicked")
+
+    // Prevent multiple submissions
+    if (isSubmitting) return
+
+    try {
+      setIsSubmitting(true)
+
+      // Prepare the final data with all refinements and changes
+      const finalData = {
+        // Basic JD information
+        title: data.title,
+        department: data.department,
+
+        // Include all sections with their current (refined) content
+        sections: {
+          ...sections,
+        },
+
+        // Include any original data properties we want to preserve
+        ...(data.includeStrategicVision !== undefined ? { includeStrategicVision: data.includeStrategicVision } : {}),
+
+        // Add comprehensive metadata about the refinement process
+        refinementMetadata: {
+          // Track all applied suggestions
+          appliedSuggestions,
+
+          // Track all refined text segments
+          refinedSegments,
+
+          // Include sharpness scores for all sections
+          sharpnessScores,
+
+          // Include improvement suggestions
+          improvementSuggestions,
+
+          // Add timestamps
+          lastModified: Date.now(),
+          finalizedAt: new Date().toISOString(),
+        },
+      }
+
+      console.log("Finalized data prepared:", finalData)
+
+      // Call the onComplete callback with the finalized data
+      onComplete(finalData)
+
+      // Show success toast
+      toast({
+        title: "JD Finalized",
+        description: "Your job description has been finalized with all refinements applied.",
+        variant: "default",
+      })
+    } catch (error) {
+      console.error("Error finalizing JD:", error)
+      toast({
+        title: "Error",
+        description: "An error occurred while finalizing the JD. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsSubmitting(false)
     }
-
-    // Prepare the final data with all refinements and changes
-    const finalData = {
-      // Basic JD information
-      title: data.title,
-      department: data.department,
-
-      // Include all sections with their current (refined) content
-      sections: {
-        ...sections,
-      },
-
-      // Include any original data properties we want to preserve
-      ...(data.includeStrategicVision !== undefined ? { includeStrategicVision: data.includeStrategicVision } : {}),
-
-      // Add comprehensive metadata about the refinement process
-      refinementMetadata: {
-        // Track all applied suggestions
-        appliedSuggestions,
-
-        // Track all refined text segments
-        refinedSegments,
-
-        // Include sharpness scores for all sections
-        sharpnessScores,
-
-        // Include improvement suggestions
-        improvementSuggestions,
-
-        // Include processing results if needed
-        processingResults: Object.keys(processingResults).reduce((acc, key) => {
-          // Only include necessary data to keep the payload smaller
-          const { sharpnessScore, changes } = processingResults[key]
-          acc[key] = { sharpnessScore, changes }
-          return acc
-        }, {}),
-
-        // Add timestamps
-        lastModified: Date.now(),
-        finalizedAt: new Date().toISOString(),
-
-        // Track which sections were modified
-        modifiedSections: Object.keys(sections).filter((section) => {
-          const original = originalTextRef.current[section]
-          const current = typeof sections[section] === "string" ? sections[section] : sections[section].join("\n")
-          return original !== current
-        }),
-
-        // Add a flag indicating Atlan Standard was applied
-        atlanStandardApplied: applyAtlanStandard,
-      },
-    }
-
-    // Call the onComplete callback with the finalized data
-    onComplete(finalData)
-
-    // Show success toast
-    toast({
-      title: "JD Finalized",
-      description: "Your job description has been finalized with all refinements applied.",
-      variant: "default",
-    })
   }
 
   const getSectionSuggestions = (section: string) => {
@@ -479,48 +473,51 @@ export function JDRefinement({
       </CardHeader>
       <CardContent>
         <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab}>
-          <EnhancedTabs
-            tabs={[
-              {
-                id: "overview",
-                label: "Position Overview",
-                badge:
-                  getRefinementProgress("overview") > 0
-                    ? { value: `${getRefinementProgress("overview")}%`, color: "green" }
-                    : undefined,
-              },
-              {
-                id: "responsibilities",
-                label: "What will you do?",
-                badge:
-                  getRefinementProgress("responsibilities") > 0
-                    ? { value: `${getRefinementProgress("responsibilities")}%`, color: "green" }
-                    : undefined,
-              },
-              {
-                id: "qualifications",
-                label: "Great Match",
-                badge:
-                  getRefinementProgress("qualifications") > 0
-                    ? { value: `${getRefinementProgress("qualifications")}%`, color: "green" }
-                    : undefined,
-              },
-            ]}
-            activeTab={activeTab}
-            onChange={setActiveTab}
-            variant="pills"
-            className="mb-6"
-          />
+          <TabsList className="grid grid-cols-3 mb-6">
+            <TabsTrigger
+              value="overview"
+              className="data-[state=active]:bg-atlan-primary data-[state=active]:text-white"
+            >
+              Position Overview
+              {getRefinementProgress("overview") > 0 && (
+                <span className="ml-2 text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">
+                  {getRefinementProgress("overview")}%
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger
+              value="responsibilities"
+              className="data-[state=active]:bg-atlan-primary data-[state=active]:text-white"
+            >
+              What will you do?
+              {getRefinementProgress("responsibilities") > 0 && (
+                <span className="ml-2 text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">
+                  {getRefinementProgress("responsibilities")}%
+                </span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger
+              value="qualifications"
+              className="data-[state=active]:bg-atlan-primary data-[state=active]:text-white"
+            >
+              Great Match
+              {getRefinementProgress("qualifications") > 0 && (
+                <span className="ml-2 text-xs bg-green-100 text-green-800 px-1.5 py-0.5 rounded-full">
+                  {getRefinementProgress("qualifications")}%
+                </span>
+              )}
+            </TabsTrigger>
+          </TabsList>
 
           <TabsContent value="overview">
             <div className="space-y-4">
               {sharpnessScores.overview && (
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex justify-between items-center">
                   <div className="flex items-center">
                     <Sparkles className="h-5 w-5 text-yellow-500 mr-2" />
                     <span className="font-medium text-sm">Sharpness Score:</span>
                   </div>
-                  <SharpnessScore score={sharpnessScores.overview} />
+                  {renderSharpnessStars(sharpnessScores.overview)}
                 </div>
               )}
 
@@ -547,15 +544,25 @@ export function JDRefinement({
 
               <div className="flex justify-between items-center">
                 <h3 className="text-sm font-medium">AI-Powered Suggestions</h3>
-                <EnhancedButton
+                <Button
                   size="sm"
-                  variant="atlan-outline"
+                  variant="outline"
                   onClick={fetchSuggestions}
-                  loading={isLoadingSuggestions}
-                  icon={isLoadingSuggestions ? undefined : <RefreshCw className="h-3 w-3" />}
+                  disabled={isLoadingSuggestions}
+                  className="text-atlan-primary border-atlan-primary hover:bg-atlan-primary/10"
                 >
-                  {isLoadingSuggestions ? "Loading..." : "Refresh"}
-                </EnhancedButton>
+                  {isLoadingSuggestions ? (
+                    <>
+                      <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-3 w-3" />
+                      Refresh
+                    </>
+                  )}
+                </Button>
               </div>
 
               {appliedSuggestions.filter((s) => s.section === "overview").length > 0 && (
@@ -577,12 +584,39 @@ export function JDRefinement({
                 </div>
               ) : getSectionSuggestions("overview").length > 0 ? (
                 getSectionSuggestions("overview").map((suggestion: any, index: number) => (
-                  <SuggestionCard
-                    key={index}
-                    suggestion={suggestion}
-                    isApplied={isSuggestionApplied(suggestion)}
-                    onApply={() => handleApplySuggestion(suggestion)}
-                  />
+                  <div key={index} className="p-4 bg-slate-50 border border-slate-200 rounded-md">
+                    <div className="flex items-start">
+                      <RefreshCw className="h-5 w-5 text-atlan-primary mt-0.5 mr-2 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">Suggested improvement:</p>
+                        <div className="mt-2 p-2 bg-red-50 border-l-2 border-red-300 text-sm">
+                          <span className="text-xs text-red-500 font-medium">Original:</span>
+                          <p className="mt-1">{suggestion.original}</p>
+                        </div>
+                        <div className="mt-2 p-2 bg-green-50 border-l-2 border-green-300 text-sm">
+                          <span className="text-xs text-green-500 font-medium">Suggestion:</span>
+                          <p className="mt-1 italic">{suggestion.suggestion}</p>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-2">Reason: {suggestion.reason}</p>
+                        <div className="mt-3 flex items-center justify-end space-x-2">
+                          {isSuggestionApplied(suggestion) ? (
+                            <div className="flex items-center text-green-600 text-sm">
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Applied
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              onClick={() => handleApplySuggestion(suggestion)}
+                              className="bg-atlan-primary hover:bg-atlan-primary-dark"
+                            >
+                              Apply Suggestion
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 ))
               ) : (
                 <div className="p-4 bg-slate-50 border border-slate-200 rounded-md text-center">
@@ -597,12 +631,12 @@ export function JDRefinement({
           <TabsContent value="responsibilities">
             <div className="space-y-4">
               {sharpnessScores.responsibilities && (
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex justify-between items-center">
                   <div className="flex items-center">
                     <Sparkles className="h-5 w-5 text-yellow-500 mr-2" />
                     <span className="font-medium text-sm">Sharpness Score:</span>
                   </div>
-                  <SharpnessScore score={sharpnessScores.responsibilities} />
+                  {renderSharpnessStars(sharpnessScores.responsibilities)}
                 </div>
               )}
 
@@ -648,15 +682,25 @@ export function JDRefinement({
 
               <div className="flex justify-between items-center">
                 <h3 className="text-sm font-medium">AI-Powered Suggestions</h3>
-                <EnhancedButton
+                <Button
                   size="sm"
-                  variant="atlan-outline"
+                  variant="outline"
                   onClick={fetchSuggestions}
-                  loading={isLoadingSuggestions}
-                  icon={isLoadingSuggestions ? undefined : <RefreshCw className="h-3 w-3" />}
+                  disabled={isLoadingSuggestions}
+                  className="text-atlan-primary border-atlan-primary hover:bg-atlan-primary/10"
                 >
-                  {isLoadingSuggestions ? "Loading..." : "Refresh"}
-                </EnhancedButton>
+                  {isLoadingSuggestions ? (
+                    <>
+                      <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-3 w-3" />
+                      Refresh
+                    </>
+                  )}
+                </Button>
               </div>
 
               {appliedSuggestions.filter((s) => s.section === "responsibilities").length > 0 && (
@@ -678,12 +722,39 @@ export function JDRefinement({
                 </div>
               ) : getSectionSuggestions("responsibilities").length > 0 ? (
                 getSectionSuggestions("responsibilities").map((suggestion: any, index: number) => (
-                  <SuggestionCard
-                    key={index}
-                    suggestion={suggestion}
-                    isApplied={isSuggestionApplied(suggestion)}
-                    onApply={() => handleApplySuggestion(suggestion)}
-                  />
+                  <div key={index} className="p-4 bg-slate-50 border border-slate-200 rounded-md">
+                    <div className="flex items-start">
+                      <RefreshCw className="h-5 w-5 text-atlan-primary mt-0.5 mr-2 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">Suggested improvement:</p>
+                        <div className="mt-2 p-2 bg-red-50 border-l-2 border-red-300 text-sm">
+                          <span className="text-xs text-red-500 font-medium">Original:</span>
+                          <p className="mt-1">{suggestion.original}</p>
+                        </div>
+                        <div className="mt-2 p-2 bg-green-50 border-l-2 border-green-300 text-sm">
+                          <span className="text-xs text-green-500 font-medium">Suggestion:</span>
+                          <p className="mt-1 italic">{suggestion.suggestion}</p>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-2">Reason: {suggestion.reason}</p>
+                        <div className="mt-3 flex items-center justify-end space-x-2">
+                          {isSuggestionApplied(suggestion) ? (
+                            <div className="flex items-center text-green-600 text-sm">
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Applied
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              onClick={() => handleApplySuggestion(suggestion)}
+                              className="bg-atlan-primary hover:bg-atlan-primary-dark"
+                            >
+                              Apply Suggestion
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 ))
               ) : (
                 <div className="p-4 bg-slate-50 border border-slate-200 rounded-md text-center">
@@ -698,12 +769,12 @@ export function JDRefinement({
           <TabsContent value="qualifications">
             <div className="space-y-4">
               {sharpnessScores.qualifications && (
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex justify-between items-center">
                   <div className="flex items-center">
                     <Sparkles className="h-5 w-5 text-yellow-500 mr-2" />
                     <span className="font-medium text-sm">Sharpness Score:</span>
                   </div>
-                  <SharpnessScore score={sharpnessScores.qualifications} />
+                  {renderSharpnessStars(sharpnessScores.qualifications)}
                 </div>
               )}
 
@@ -749,15 +820,25 @@ export function JDRefinement({
 
               <div className="flex justify-between items-center">
                 <h3 className="text-sm font-medium">AI-Powered Suggestions</h3>
-                <EnhancedButton
+                <Button
                   size="sm"
-                  variant="atlan-outline"
+                  variant="outline"
                   onClick={fetchSuggestions}
-                  loading={isLoadingSuggestions}
-                  icon={isLoadingSuggestions ? undefined : <RefreshCw className="h-3 w-3" />}
+                  disabled={isLoadingSuggestions}
+                  className="text-atlan-primary border-atlan-primary hover:bg-atlan-primary/10"
                 >
-                  {isLoadingSuggestions ? "Loading..." : "Refresh"}
-                </EnhancedButton>
+                  {isLoadingSuggestions ? (
+                    <>
+                      <Loader2 className="mr-2 h-3 w-3 animate-spin" />
+                      Loading...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="mr-2 h-3 w-3" />
+                      Refresh
+                    </>
+                  )}
+                </Button>
               </div>
 
               {appliedSuggestions.filter((s) => s.section === "qualifications").length > 0 && (
@@ -779,12 +860,39 @@ export function JDRefinement({
                 </div>
               ) : getSectionSuggestions("qualifications").length > 0 ? (
                 getSectionSuggestions("qualifications").map((suggestion: any, index: number) => (
-                  <SuggestionCard
-                    key={index}
-                    suggestion={suggestion}
-                    isApplied={isSuggestionApplied(suggestion)}
-                    onApply={() => handleApplySuggestion(suggestion)}
-                  />
+                  <div key={index} className="p-4 bg-slate-50 border border-slate-200 rounded-md">
+                    <div className="flex items-start">
+                      <RefreshCw className="h-5 w-5 text-atlan-primary mt-0.5 mr-2 flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">Suggested improvement:</p>
+                        <div className="mt-2 p-2 bg-red-50 border-l-2 border-red-300 text-sm">
+                          <span className="text-xs text-red-500 font-medium">Original:</span>
+                          <p className="mt-1">{suggestion.original}</p>
+                        </div>
+                        <div className="mt-2 p-2 bg-green-50 border-l-2 border-green-300 text-sm">
+                          <span className="text-xs text-green-500 font-medium">Suggestion:</span>
+                          <p className="mt-1 italic">{suggestion.suggestion}</p>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-2">Reason: {suggestion.reason}</p>
+                        <div className="mt-3 flex items-center justify-end space-x-2">
+                          {isSuggestionApplied(suggestion) ? (
+                            <div className="flex items-center text-green-600 text-sm">
+                              <CheckCircle className="h-4 w-4 mr-1" />
+                              Applied
+                            </div>
+                          ) : (
+                            <Button
+                              size="sm"
+                              onClick={() => handleApplySuggestion(suggestion)}
+                              className="bg-atlan-primary hover:bg-atlan-primary-dark"
+                            >
+                              Apply Suggestion
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 ))
               ) : (
                 <div className="p-4 bg-slate-50 border border-slate-200 rounded-md text-center">
@@ -798,14 +906,21 @@ export function JDRefinement({
         </Tabs>
 
         <div className="mt-6 flex justify-end">
-          <EnhancedButton
+          <Button
             onClick={handleFinalize}
-            size="lg"
-            loading={isLoading}
-            icon={isLoading ? undefined : <Sparkles className="h-4 w-4" />}
+            className="bg-atlan-primary hover:bg-atlan-primary-dark text-white"
+            disabled={isLoading || isSubmitting}
+            id="finalize-jd-button"
           >
-            {isLoading ? "Finalizing..." : "Finalize JD"}
-          </EnhancedButton>
+            {isLoading || isSubmitting ? (
+              <>
+                <span className="animate-pulse mr-2">⚡</span>
+                Finalizing...
+              </>
+            ) : (
+              "Finalize JD"
+            )}
+          </Button>
         </div>
       </CardContent>
     </Card>
