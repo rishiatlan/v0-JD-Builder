@@ -1,36 +1,23 @@
 import type React from "react"
-import type { Metadata } from "next"
-import { Inter } from "next/font/google"
 import "./globals.css"
-import { Toaster } from "@/components/ui/toaster"
-import { AuthProvider } from "@/lib/auth-context"
-import { AppProvider } from "@/lib/app-context"
-import { ErrorBoundary } from "@/components/error-boundary"
+import { Inter } from "next/font/google"
+import { ThemeProvider } from "@/components/theme-provider"
 
 const inter = Inter({ subsets: ["latin"] })
 
-export const metadata: Metadata = {
-  title: "Atlan JD Analyzer",
-  description: "Create world-class job descriptions with Atlan's JD Analyzer",
+export const metadata = {
+  title: "Atlan JD Builder",
+  description: "Create world-class job descriptions that follow Atlan's standards of excellence.",
     generator: 'v0.dev'
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body className={inter.className}>
-        <ErrorBoundary>
-          <AuthProvider>
-            <AppProvider>
-              {children}
-              <Toaster />
-            </AppProvider>
-          </AuthProvider>
-        </ErrorBoundary>
+        <ThemeProvider attribute="class" defaultTheme="light" enableSystem>
+          {children}
+        </ThemeProvider>
       </body>
     </html>
   )

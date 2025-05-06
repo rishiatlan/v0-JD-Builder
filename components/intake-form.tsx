@@ -9,13 +9,16 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Upload, FileText, Loader2, AlertCircle, Eye } from "lucide-react"
+import { Upload, FileText, Loader2, AlertCircle, Eye, Info } from "lucide-react"
 import { generateJD, analyzeUploadedDocument } from "@/app/actions"
 import { useToast } from "@/components/ui/use-toast"
 import { DocumentParser } from "@/components/document-parser"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { departments } from "@/lib/department-data"
 
 interface IntakeFormProps {
-  onSubmit: (data: any) => void
+  onSubmit: (data: any, warning?: string) => void
   isLoading: boolean
   initialData?: any
 }
@@ -43,9 +46,11 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
     title: "",
     department: "",
     outcomes: "",
+    measurableOutcomes: "",
     mindset: "",
     advantage: "",
     decisions: "",
+    includeStrategicVision: true,
   })
   const [file, setFile] = useState<File | null>(null)
   const [fileContent, setFileContent] = useState<string | null>(null)
@@ -74,6 +79,14 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
     setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleSelectChange = (name: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [name]: value }))
+  }
+
+  const handleCheckboxChange = (name: string, checked: boolean) => {
+    setFormData((prev) => ({ ...prev, [name]: checked }))
   }
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -159,7 +172,11 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
         // Create FormData object
         const formDataObj = new FormData()
         Object.entries(debouncedFormData).forEach(([key, value]) => {
-          formDataObj.append(key, value)
+          if (typeof value === "boolean") {
+            formDataObj.append(key, value.toString())
+          } else {
+            formDataObj.append(key, value as string)
+          }
         })
 
         // Call the server action
@@ -167,7 +184,14 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
         console.log("generateJD result:", result)
 
         if (result.success) {
-          onSubmit(result.data)
+          onSubmit(result.data, result.warning)
+          if (result.warning) {
+            toast({
+              title: "Note",
+              description: result.warning,
+              variant: "default",
+            })
+          }
         } else {
           setError(result.error || "Failed to generate job description")
           toast({
@@ -184,7 +208,14 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
         console.log("analyzeUploadedDocument result:", result)
 
         if (result.success) {
-          onSubmit(result.data)
+          onSubmit(result.data, result.warning)
+          if (result.warning) {
+            toast({
+              title: "Note",
+              description: result.warning,
+              variant: "default",
+            })
+          }
         } else {
           // Check if the error is related to the Gemini API being overloaded
           if (result.error?.includes("overloaded") || result.error?.includes("503")) {
@@ -238,18 +269,21 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
   }
 
   return (
-    <Card className="bg-white shadow-md border border-slate-200">
+    <Card className="bg-white border border-slate-200 rounded-lg overflow-hidden">
       <CardContent className="pt-6">
         <Tabs defaultValue="questionnaire" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2 mb-6">
+          <TabsList className="grid w-full grid-cols-2 border-b border-slate-200 rounded-none">
             <TabsTrigger
               value="questionnaire"
-              className="data-[state=active]:bg-atlan-primary data-[state=active]:text-white"
+              className="py-3 px-4 text-center font-medium data-[state=active]:bg-atlan-primary data-[state=active]:text-white data-[state=inactive]:bg-white data-[state=inactive]:text-slate-600 data-[state=inactive]:hover:bg-slate-50 rounded-none"
             >
               <FileText className="mr-2 h-4 w-4" />
               Dynamic Questionnaire
             </TabsTrigger>
-            <TabsTrigger value="upload" className="data-[state=active]:bg-atlan-primary data-[state=active]:text-white">
+            <TabsTrigger
+              value="upload"
+              className="py-3 px-4 text-center font-medium data-[state=active]:bg-atlan-primary data-[state=active]:text-white data-[state=inactive]:bg-white data-[state=inactive]:text-slate-600 data-[state=inactive]:hover:bg-slate-50 rounded-none"
+            >
               <Upload className="mr-2 h-4 w-4" />
               Upload Document
             </TabsTrigger>
@@ -271,14 +305,22 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="department">Department</Label>
-                  <Input
-                    id="department"
+                  <Select
                     name="department"
-                    placeholder="e.g., Product"
                     value={formData.department}
-                    onChange={handleInputChange}
-                    required
-                  />
+                    onValueChange={(value) => handleSelectChange("department", value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {departments.map((dept) => (
+                        <SelectItem key={dept.value} value={dept.value}>
+                          {dept.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
 
@@ -293,6 +335,25 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
                   rows={3}
                   required
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="measurableOutcomes">
+                  What are 3-5 measurable outcomes this role should achieve in 12 months?
+                </Label>
+                <Textarea
+                  id="measurableOutcomes"
+                  name="measurableOutcomes"
+                  placeholder="List specific, measurable outcomes this person should achieve in their first year..."
+                  value={formData.measurableOutcomes}
+                  onChange={handleInputChange}
+                  rows={3}
+                  required
+                />
+                <p className="text-xs text-slate-500 mt-1">
+                  <Info className="inline h-3 w-3 mr-1" />
+                  Focus on what this person will make better, solve, or enable with specific metrics
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -334,6 +395,17 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
                   rows={3}
                   required
                 />
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="includeStrategicVision"
+                  checked={formData.includeStrategicVision}
+                  onCheckedChange={(checked) => handleCheckboxChange("includeStrategicVision", checked as boolean)}
+                />
+                <Label htmlFor="includeStrategicVision" className="text-sm font-medium">
+                  Include a Strategic Vision paragraph for this role
+                </Label>
               </div>
 
               {error && (

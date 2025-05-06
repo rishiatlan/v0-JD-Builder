@@ -1,6 +1,6 @@
 import type { Config } from "tailwindcss"
 
-const config = {
+const config: Config = {
   darkMode: ["class"],
   content: [
     "./pages/**/*.{ts,tsx}",
@@ -9,7 +9,6 @@ const config = {
     "./src/**/*.{ts,tsx}",
     "*.{js,ts,jsx,tsx,mdx}",
   ],
-  prefix: "",
   theme: {
     container: {
       center: true,
@@ -53,13 +52,8 @@ const config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        // Atlan brand colors
-        atlan: {
-          primary: "#00A2B8",
-          "primary-dark": "#008A9D",
-          accent: "#FFB800",
-          secondary: "#6366F1",
-        },
+        "atlan-primary": "#00B8D4",
+        "atlan-primary-dark": "#0097A7",
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -83,6 +77,6 @@ const config = {
     },
   },
   plugins: [require("tailwindcss-animate")],
-} satisfies Config
+}
 
 export default config

@@ -1,6 +1,3 @@
-import { getDepartmentByValue, getDepartmentByName } from "@/lib/department-data"
-import { AlertTriangle, CheckCircle2 } from "lucide-react"
-
 interface JDOutputProps {
   data: any
 }
@@ -17,9 +14,6 @@ export function JDOutput({ data }: JDOutputProps) {
 
   // Destructure with default values to prevent further errors
   const { title = "Job Title", department = "Department", sections = {}, refinementMetadata = {} } = data
-
-  // Get department guardrails
-  const departmentInfo = getDepartmentByValue(department) || getDepartmentByName(department)
 
   const renderList = (items: string[] | string) => {
     if (!items) return <p className="mb-4">No items available</p>
@@ -62,11 +56,11 @@ export function JDOutput({ data }: JDOutputProps) {
     <div className="prose max-w-none">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-atlan-primary mb-2">{title}</h1>
-        <p className="text-lg text-slate-600">{departmentInfo ? departmentInfo.name : department}</p>
+        <p className="text-lg text-slate-600">{department}</p>
         <p className="text-sm text-slate-500 mt-2">
-          Engineering Hiring Manager: {departmentInfo ? departmentInfo.name : department} Hiring Manager | Date of
-          Intake: {new Date().toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })} |
-          Bi-/Weekly Cadence Call: To Be Scheduled | Start Date: {formattedStartDate}
+          Engineering Hiring Manager: {department} Hiring Manager | Date of Intake:{" "}
+          {new Date().toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" })} | Bi-/Weekly
+          Cadence Call: To Be Scheduled | Start Date: {formattedStartDate}
         </p>
 
         {overallSharpnessScore && (
@@ -96,46 +90,6 @@ export function JDOutput({ data }: JDOutputProps) {
           </div>
         )}
       </div>
-
-      {/* Role Boundary Guardrails */}
-      {departmentInfo && (
-        <div className="mb-8 border border-slate-200 rounded-lg overflow-hidden">
-          <div className="bg-slate-100 p-4 border-b border-slate-200">
-            <h2 className="text-xl font-semibold mb-0">Role Boundary Guardrails</h2>
-            <p className="text-sm text-slate-600 mt-1">
-              These guardrails ensure the role is properly scoped for the {departmentInfo.name} department
-            </p>
-          </div>
-          <div className="p-4">
-            <div className="mb-4">
-              <div className="flex items-center mb-2">
-                <CheckCircle2 className="h-5 w-5 text-green-600 mr-2" />
-                <h3 className="text-lg font-medium text-green-700 m-0">Ownership Areas</h3>
-              </div>
-              <ul className="list-disc pl-5 space-y-1 text-green-800">
-                {departmentInfo.guardrails.owns.map((item, index) => (
-                  <li key={`owns-${index}`} className="text-sm">
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <div className="flex items-center mb-2">
-                <AlertTriangle className="h-5 w-5 text-amber-600 mr-2" />
-                <h3 className="text-lg font-medium text-amber-700 m-0">Areas to Avoid</h3>
-              </div>
-              <ul className="list-disc pl-5 space-y-1 text-amber-800">
-                {departmentInfo.guardrails.avoid.map((item, index) => (
-                  <li key={`avoid-${index}`} className="text-sm">
-                    {item}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Static Introduction */}
       <div className="mb-8">

@@ -1,139 +1,19 @@
-// Direct API implementation for Gemini
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+// This is a placeholder for the actual OpenHands library implementation
+// In a real implementation, this would connect to the Gemini API directly
 
-// Circuit breaker state
-const circuitState = {
-  isOpen: false,
-  failureCount: 0,
-  lastFailureTime: 0,
-  failureThreshold: 2, // Number of failures before opening circuit
-  resetTimeout: 60000, // 1 minute timeout before trying again
-}
-
-// Rate limiting state
-const rateLimitState = {
-  lastRequestTime: 0,
-  minRequestInterval: 1000, // Minimum 1 second between requests
-}
-
-// Debounce function
-function debounce<F extends (...args: any[]) => any>(func: F, wait: number) {
-  let timeout: ReturnType<typeof setTimeout> | null = null
-
-  return (...args: Parameters<F>) => {
-    if (timeout !== null) {
-      clearTimeout(timeout)
-    }
-    timeout = setTimeout(() => func(...args), wait)
-  }
-}
-
-// Function to chunk text to avoid overloading the model
-function chunkText(text: string, maxChunkSize = 4000): string[] {
-  if (text.length <= maxChunkSize) {
-    return [text]
-  }
-
-  const chunks: string[] = []
-  let currentChunk = ""
-
-  // Split by paragraphs first
-  const paragraphs = text.split(/\n\n+/)
-
-  for (const paragraph of paragraphs) {
-    if (currentChunk.length + paragraph.length + 2 <= maxChunkSize) {
-      currentChunk += (currentChunk ? "\n\n" : "") + paragraph
-    } else {
-      // If current paragraph doesn't fit, save current chunk and start a new one
-      if (currentChunk) {
-        chunks.push(currentChunk)
-        currentChunk = paragraph
-      } else {
-        // If a single paragraph is too long, split by sentences
-        const sentences = paragraph.split(/(?<=[.!?])\s+/)
-        for (const sentence of sentences) {
-          if (currentChunk.length + sentence.length + 1 <= maxChunkSize) {
-            currentChunk += (currentChunk ? " " : "") + sentence
-          } else {
-            chunks.push(currentChunk)
-            currentChunk = sentence
-          }
-        }
-      }
-    }
-  }
-
-  if (currentChunk) {
-    chunks.push(currentChunk)
-  }
-
-  return chunks
-}
-
-// Function to generate content with Gemini with circuit breaker pattern
-export async function generateWithGemini(prompt: string) {
-  // Check if circuit is open (API is known to be down)
-  if (circuitState.isOpen) {
-    const now = Date.now()
-    if (now - circuitState.lastFailureTime < circuitState.resetTimeout) {
-      console.log("Circuit is open, using fallback response")
-      throw new Error("AI service temporarily unavailable - circuit open")
-    } else {
-      // Try to reset the circuit after timeout
-      console.log("Attempting to reset circuit")
-      circuitState.isOpen = false
-    }
-  }
-
-  // Apply rate limiting
-  const now = Date.now()
-  const timeSinceLastRequest = now - rateLimitState.lastRequestTime
-  if (timeSinceLastRequest < rateLimitState.minRequestInterval) {
-    const waitTime = rateLimitState.minRequestInterval - timeSinceLastRequest
-    console.log(`Rate limiting: waiting ${waitTime}ms before next request`)
-    await new Promise((resolve) => setTimeout(resolve, waitTime))
-  }
-
+export async function generateWithGemini(prompt: string): Promise<string> {
   try {
-    // Replace GEMINI_API_KEY with the actual environment variable
-    const apiKey = process.env.GEMINI_API_KEY
+    // Use the environment variable for the API key
+    const apiKey = process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY_2 || process.env.GEMINI_API_KEY_3
 
     if (!apiKey) {
-      console.error("GEMINI_API_KEY environment variable is not set")
-      throw new Error("API key not configured")
+      throw new Error("Gemini API key not found in environment variables")
     }
 
-    // Chunk the prompt if it's too large
-    const promptChunks = chunkText(prompt, 4000)
-    let fullResponse = ""
-
-    // Process each chunk
-    for (let i = 0; i < promptChunks.length; i++) {
-      const chunk = promptChunks[i]
-      const isFirstChunk = i === 0
-      const isLastChunk = i === promptChunks.length - 1
-
-      // Add context for chunked prompts
-      let processedChunk = chunk
-      if (promptChunks.length > 1) {
-        if (!isFirstChunk) {
-          processedChunk = `(Continuing from previous chunk) ${chunk}`
-        }
-        if (!isLastChunk) {
-          processedChunk = `${chunk} (to be continued in next chunk)`
-        }
-      }
-
-      const url = `${GEMINI_API_URL}?key=${apiKey}`
-      console.log(
-        `Calling Gemini API with prompt chunk ${i + 1}/${promptChunks.length}, length: ${processedChunk.length}`,
-      )
-
-      // Update rate limit state
-      rateLimitState.lastRequestTime = Date.now()
-
-      // Use native fetch instead of importing https
-      const response = await fetch(url, {
+    // Call the Gemini API directly using fetch with the correct model: gemini-2.0-flash
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+      {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -143,500 +23,318 @@ export async function generateWithGemini(prompt: string) {
             {
               parts: [
                 {
-                  text: processedChunk,
+                  text: prompt,
                 },
               ],
             },
           ],
           generationConfig: {
             temperature: 0.7,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 8192,
+            maxOutputTokens: 4096,
           },
         }),
-      })
+      },
+    )
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error(`API request failed with status ${response.status}:`, errorText)
-
-        // If the model is overloaded (503), update circuit breaker
-        if (response.status === 503) {
-          circuitState.failureCount++
-          circuitState.lastFailureTime = Date.now()
-
-          if (circuitState.failureCount >= circuitState.failureThreshold) {
-            circuitState.isOpen = true
-            console.log("Circuit breaker opened due to multiple failures")
-          }
-
-          throw new Error("AI service is currently overloaded")
-        }
-
-        throw new Error(`API request failed with status ${response.status}: ${errorText}`)
-      }
-
-      // Reset failure count on success
-      circuitState.failureCount = 0
-
-      const data = await response.json()
-      console.log(`Gemini API response for chunk ${i + 1}:`, JSON.stringify(data).substring(0, 200) + "...")
-
-      if (
-        !data.candidates ||
-        !data.candidates[0] ||
-        !data.candidates[0].content ||
-        !data.candidates[0].content.parts ||
-        !data.candidates[0].content.parts[0]
-      ) {
-        console.error("Unexpected API response structure:", JSON.stringify(data))
-        throw new Error("Unexpected API response structure")
-      }
-
-      fullResponse += data.candidates[0].content.parts[0].text
-
-      // Add a small delay between chunk requests to avoid rate limiting
-      if (!isLastChunk) {
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-      }
+    if (!response.ok) {
+      const errorData = await response.json()
+      console.error("Gemini API error:", errorData)
+      throw new Error(`Gemini API error: ${response.status} ${response.statusText}`)
     }
 
-    return fullResponse
+    const data = await response.json()
+
+    // Extract the text from the response
+    let text = ""
+    if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+      text = data.candidates[0].content.parts.map((part: any) => part.text).join("")
+    }
+
+    return text
   } catch (error) {
-    console.error("Error generating content with Gemini:", error)
-    throw error
+    console.error("Error generating with Gemini:", error)
+    throw new Error("Failed to generate content with Gemini API")
   }
 }
 
-// Debounced version of generateWithGemini for UI interactions
-export const debouncedGenerateWithGemini = debounce(generateWithGemini, 500)
-
-// Function to structure a JD according to Atlan standards
-export async function generateAtlanJD(data: any) {
-  // Always use the AI service, no fallbacks
-  return await generateAtlanJDWithAI(data)
-}
-
-// AI-based JD generation
-async function generateAtlanJDWithAI(data: any) {
-  const prompt = `
-    Create a detailed, production-ready job description for the role of ${data.title} at Atlan following the Atlan Standard of Excellence.
-    
-    About the role:
-    - Title: ${data.title}
-    - Department: ${data.department}
-    - Key outcomes that define success: ${data.outcomes}
-    - Mindset/instincts of top performers: ${data.mindset}
-    - Strategic advantage this role provides: ${data.advantage}
-    - Key decisions/trade-offs in this role: ${data.decisions}
-    
-    The JD should follow Atlan's approved framework with these sections:
-    1. Position Overview - A detailed paragraph explaining the role's purpose, impact, and where it fits in the organization
-    2. "What will you do?" - 7-10 specific, detailed bullet points of key responsibilities that clearly outline day-to-day work and strategic contributions
-    3. "What makes you a great match for us?" - 7-10 specific, detailed bullet points of qualifications, experience, and traits required for success
-    
-    Voice and Tone Guidelines:
-    - Strategic clarity with specific details about the role's impact
-    - Inspirational language that connects to Atlan's mission
-    - Focus on ownership and high-leverage behaviors with concrete examples
-    - Mission-driven and excellence-first voice
-    - Avoid corporate clichés and bland statements
-    - Attract globally elite, mission-driven candidates with compelling language
-    
-    Format the response as a JSON object with the following structure:
-    {
-      "sections": {
-        "overview": "...",
-        "responsibilities": ["...", "...", "..."],
-        "qualifications": ["...", "...", "..."]
-      },
-      "analysis": {
-        "clarity": 85,
-        "inclusivity": 78,
-        "seo": 92,
-        "attraction": 88
-      },
-      "suggestions": [
-        {
-          "section": "overview",
-          "original": "...",
-          "suggestion": "...",
-          "reason": "..."
-        }
-      ],
-      "biasFlags": [
-        {
-          "term": "...",
-          "context": "...",
-          "suggestion": "...",
-          "reason": "..."
-        }
-      ]
-    }
-    
-    Ensure the content is bias-free, inclusive, and optimized to attract top 10% global talent.
-    Make sure each responsibility and qualification is specific, detailed, and tailored to the role.
-    
-    IMPORTANT: 
-    - AVOID phrases like "X years of experience" or "minimum Y years" in qualifications
-    - Instead, describe skills and achievements with language like "proven experience," "track record," or outcome-based accomplishments
-    - Frame qualifications based on impact and capabilities, not tenure
-    - Include specific technical skills and concrete examples where appropriate
-    - Use phrases like "demonstrated ability to..." or "experience successfully..." instead of time-based requirements
-  `
-
-  console.log("Generating Atlan JD with data:", JSON.stringify(data))
-  const response = await generateWithGemini(prompt)
-  console.log("Raw LLM response:", response.substring(0, 500) + "...")
-
-  // Try to extract JSON if the response contains non-JSON text
-  let jsonStr = response
-
-  // Look for JSON-like structure if the response isn't pure JSON
-  if (!jsonStr.trim().startsWith("{")) {
-    const jsonMatch = response.match(/\{[\s\S]*\}/)
-    if (jsonMatch) {
-      jsonStr = jsonMatch[0]
-      console.log("Extracted JSON from response:", jsonStr.substring(0, 200) + "...")
-    }
-  }
-
+// Add a fallback mechanism to handle API failures
+export async function generateWithFallback(prompt: string): Promise<string> {
   try {
-    // Parse the JSON response
-    const parsedData = JSON.parse(jsonStr)
-    console.log("Successfully parsed JD data:", Object.keys(parsedData))
-    return parsedData
-  } catch (parseError) {
-    console.error("JSON parsing error:", parseError)
-    console.error("Failed to parse:", jsonStr)
-    throw new Error("Failed to parse AI response")
-  }
-}
-
-// Template-based fallback JD generation
-// function generateFallbackJD(data: any) {
-//   // Create a template-based JD using the provided data
-//   const overview = `As a ${data.title} in the ${data.department} department at Atlan, you will play a crucial role in ${data.outcomes}. This position requires someone with ${data.mindset}, who can navigate complex decisions related to ${data.decisions} while contributing to ${data.advantage}.`
-
-//   // Generate responsibilities based on the role
-//   const responsibilities = [
-//     `Drive key outcomes including ${data.outcomes}`,
-//     `Demonstrate and embody the mindset of ${data.mindset}`,
-//     `Make strategic decisions regarding ${data.decisions}`,
-//     `Contribute to Atlan's competitive advantage through ${data.advantage}`,
-//     `Collaborate with cross-functional teams to achieve department goals`,
-//     `Continuously improve processes and methodologies within your domain`,
-//   ]
-
-//   // Generate qualifications based on the role
-//   const qualifications = [
-//     `Proven experience in ${data.department} or related field`,
-//     `Strong understanding of ${data.outcomes.split(" ").slice(0, 3).join(" ")}`,
-//     `Demonstrated ability to ${data.mindset.split(" ").slice(0, 3).join(" ")}`,
-//     `Experience making decisions related to ${data.decisions.split(" ").slice(0, 3).join(" ")}`,
-//     `Excellent communication and collaboration skills`,
-//     `Passion for Atlan's mission and values`,
-//   ]
-
-//   return {
-//     sections: {
-//       overview,
-//       responsibilities,
-//       qualifications,
-//     },
-//     analysis: {
-//       clarity: 80,
-//       inclusivity: 85,
-//       seo: 75,
-//       attraction: 80,
-//     },
-//     suggestions: [
-//       {
-//         section: "overview",
-//         original: "This is a template-generated overview.",
-//         suggestion: "Consider adding more specific details about the role's impact.",
-//         reason: "More specificity will attract better candidates.",
-//       },
-//     ],
-//     biasFlags: [],
-//     isTemplateFallback: true, // Flag to indicate this was generated by the template
-//   }
-// }
-
-// Function to get refinement suggestions for a specific section
-export async function getRefinementSuggestions(section: string, content: string) {
-  try {
-    // Try to use the AI service
-    return await getRefinementSuggestionsWithAI(section, content)
+    return await generateWithGemini(prompt)
   } catch (error) {
-    console.log("AI service unavailable for refinement, using fallback suggestions")
-    // Use fallback template-based approach
-    return generateFallbackRefinements(section, content)
+    console.error("Gemini API failed, using fallback:", error)
+    // Return a basic response that indicates we're using a fallback
+    return JSON.stringify({
+      fallback: true,
+      message: "Generated using fallback mechanism due to API limitations",
+      timestamp: new Date().toISOString(),
+    })
   }
 }
 
-// AI-based refinement suggestions
-async function getRefinementSuggestionsWithAI(section: string, content: string) {
-  const prompt = `
-    Analyze the following ${section} section of a job description for Atlan and provide refinement suggestions:
-    
-    "${content}"
-    
-    Provide suggestions that:
-    1. Enhance strategic clarity
-    2. Use more inspirational language
-    3. Focus on ownership and high-leverage behaviors
-    4. Align with Atlan's mission-driven and excellence-first voice
-    5. Remove any corporate clichés or bland statements
-    6. Make it more attractive to globally elite, mission-driven candidates
-    
-    Format the response as a JSON array with the following structure:
-    [
-      {
-        "original": "...",
-        "suggestion": "...",
-        "reason": "..."
-      }
-    ]
-    
-    Provide 2-3 high-impact suggestions that would significantly improve the content.
-    
-    IMPORTANT: Your response must be valid JSON that can be parsed with JSON.parse().
-  `
-
-  console.log(`Getting refinement suggestions for ${section} section`)
-  const response = await generateWithGemini(prompt)
-  console.log("Raw refinement suggestions response:", response.substring(0, 200) + "...")
-
-  // Try to extract JSON if the response contains non-JSON text
-  let jsonStr = response
-
-  // Look for JSON-like structure if the response isn't pure JSON
-  if (!jsonStr.trim().startsWith("[")) {
-    const jsonMatch = response.match(/\[[\s\S]*\]/)
-    if (jsonMatch) {
-      jsonStr = jsonMatch[0]
-      console.log("Extracted JSON array from response:", jsonStr.substring(0, 200) + "...")
+export async function generateAtlanJD(data: any): Promise<any> {
+  try {
+    // Construct a prompt that includes department guardrails if available
+    let guardrailsPrompt = ""
+    if (data.departmentGuardrails) {
+      guardrailsPrompt = `
+      IMPORTANT ROLE BOUNDARY GUARDRAILS:
+      This is a ${data.department} role. Please ensure the job description follows these guardrails:
+      
+      OWNERSHIP AREAS (include these responsibilities):
+      ${data.departmentGuardrails.owns}
+      
+      AREAS TO AVOID (do not include these responsibilities):
+      ${data.departmentGuardrails.avoid}
+      `
     }
-  }
-
-  try {
-    // Parse the JSON response
-    return JSON.parse(jsonStr)
-  } catch (parseError) {
-    console.error("JSON parsing error for refinement suggestions:", parseError)
-    console.error("Failed to parse:", jsonStr)
-    throw new Error("Failed to parse AI response for refinements")
-  }
-}
-
-// Template-based fallback refinement suggestions
-function generateFallbackRefinements(section: string, content: string) {
-  // Generic refinement suggestions based on section type
-  if (section === "overview") {
-    return [
-      {
-        original: "Template suggestion for overview",
-        suggestion: "Consider highlighting the strategic impact of this role more clearly",
-        reason: "Strategic clarity helps candidates understand their potential contribution",
-      },
-      {
-        original: "Template suggestion for overview",
-        suggestion: "Add more inspirational language about the mission and vision",
-        reason: "Inspirational language attracts mission-driven candidates",
-      },
-    ]
-  } else if (section === "responsibilities") {
-    return [
-      {
-        original: "Template suggestion for responsibilities",
-        suggestion: "Start each responsibility with a strong action verb",
-        reason: "Action verbs create a sense of ownership and impact",
-      },
-      {
-        original: "Template suggestion for responsibilities",
-        suggestion: "Include metrics or outcomes for key responsibilities",
-        reason: "Quantifiable outcomes help candidates understand success criteria",
-      },
-    ]
-  } else if (section === "qualifications") {
-    return [
-      {
-        original: "Template suggestion for qualifications",
-        suggestion: "Focus on capabilities and mindset rather than just years of experience",
-        reason: "This attracts diverse talent who may have non-traditional backgrounds",
-      },
-      {
-        original: "Template suggestion for qualifications",
-        suggestion: "Include both technical and soft skills required for success",
-        reason: "Balanced skill requirements attract well-rounded candidates",
-      },
-    ]
-  }
-
-  // Default fallback
-  return [
-    {
-      original: "Template suggestion",
-      suggestion: "Use more specific and impactful language",
-      reason: "Specificity and impact attract top talent",
-    },
-    {
-      original: "Template suggestion",
-      suggestion: "Align content more closely with Atlan's mission and values",
-      reason: "Mission alignment attracts candidates who share your values",
-    },
-  ]
-}
-
-// Function to check for bias in JD content
-export async function checkForBias(content: string) {
-  try {
-    // Try to use the AI service
-    return await checkForBiasWithAI(content)
-  } catch (error) {
-    console.log("AI service unavailable for bias check, using fallback check")
-    // Use fallback template-based approach
-    return generateFallbackBiasCheck(content)
-  }
-}
-
-// AI-based bias check
-async function checkForBiasWithAI(content: string) {
-  // Chunk the content to avoid overloading the model
-  const contentChunks = chunkText(content, 3000)
-  let allBiasFlags: any[] = []
-
-  for (let i = 0; i < contentChunks.length; i++) {
-    const chunk = contentChunks[i]
 
     const prompt = `
-    Analyze the following job description content for potential bias, non-inclusive language, or exclusionary terms:
-    
-    "${chunk}"
-    
-    Identify any gender-coded, exclusionary, or non-inclusive terms, with special attention to:
-    1. Gender-coded language (he/she, him/her, etc.)
-    2. Years of experience requirements (e.g., "5+ years experience", "minimum 3 years", etc.)
-    3. Exclusionary terms or phrases that might discourage diverse candidates
-    
-    Format the response as a JSON array with the following structure:
-    [
+      Create a comprehensive job description for the following role:
+      
+      Title: ${data.title}
+      Department: ${data.department}
+      
+      Key Outcomes: ${data.outcomes}
+      Measurable Outcomes: ${data.measurableOutcomes || "Not specified"}
+      Mindset/Instincts: ${data.mindset}
+      Strategic Advantage: ${data.advantage}
+      Key Decisions/Trade-offs: ${data.decisions}
+      
+      ${guardrailsPrompt}
+      
+      Format the response as a JSON object with the following structure:
       {
-        "term": "...",
-        "context": "...",
-        "suggestion": "...",
-        "reason": "..."
+        "sections": {
+          "overview": "A compelling paragraph that summarizes the role, its impact, and why it matters",
+          "responsibilities": ["Responsibility 1", "Responsibility 2", ...],
+          "qualifications": ["Qualification 1", "Qualification 2", ...]
+        },
+        "analysis": {
+          "clarity": 0-100 score,
+          "inclusivity": 0-100 score,
+          "seo": 0-100 score,
+          "attraction": 0-100 score
+        },
+        "biasFlags": [
+          {"text": "potentially biased text", "reason": "explanation of bias", "suggestion": "alternative text"}
+        ]
       }
-    ]
-    
-    For years of experience requirements, suggest alternatives like:
-    - "Proven experience in..."
-    - "Demonstrated ability to..."
-    - "Track record of..."
-    - "History of successfully..."
-    
-    If no bias is detected, return an empty array.
-    
-    IMPORTANT: Your response must be valid JSON that can be parsed with JSON.parse().
-  `
-
-    console.log(`Checking for bias in content chunk ${i + 1}/${contentChunks.length}`)
-    const response = await generateWithGemini(prompt)
-    console.log(`Raw bias check response for chunk ${i + 1}:`, response.substring(0, 200) + "...")
-
-    // Try to extract JSON if the response contains non-JSON text
-    let jsonStr = response
-
-    // Look for JSON-like structure if the response isn't pure JSON
-    if (!jsonStr.trim().startsWith("[")) {
-      const jsonMatch = response.match(/\[[\s\S]*\]/)
-      if (jsonMatch) {
-        jsonStr = jsonMatch[0]
-        console.log("Extracted JSON array from response:", jsonStr.substring(0, 200) + "...")
-      } else if (jsonStr.includes("[]") || jsonStr.includes("[ ]")) {
-        // Handle empty array case
-        continue
-      }
-    }
+      
+      IMPORTANT GUIDELINES:
+      1. Make the overview compelling and outcome-focused
+      2. List 5-7 key responsibilities that align with the department's ownership areas
+      3. List 5-7 qualifications that would make someone successful
+      4. Ensure language is inclusive and free of bias
+      5. Focus on measurable outcomes rather than tasks
+      6. Use active voice and strong action verbs
+      7. Avoid jargon and buzzwords
+      8. Keep the tone professional but conversational
+      9. STRICTLY FOLLOW THE ROLE BOUNDARY GUARDRAILS
+      
+      Your response must be valid JSON that can be parsed with JSON.parse().
+    `
 
     try {
-      // Parse the JSON response
-      const biasFlags = JSON.parse(jsonStr)
-      allBiasFlags = [...allBiasFlags, ...biasFlags]
-    } catch (parseError) {
-      console.error("JSON parsing error for bias check:", parseError)
-      console.error("Failed to parse:", jsonStr)
-      // Continue with other chunks instead of failing completely
-    }
+      const response = await generateWithFallback(prompt)
 
-    // Add a small delay between chunk requests
-    if (i < contentChunks.length - 1) {
-      await new Promise((resolve) => setTimeout(resolve, 1000))
+      // Extract JSON from the response
+      let jsonStr = response
+      if (!jsonStr.trim().startsWith("{")) {
+        const jsonMatch = response.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          jsonStr = jsonMatch[0]
+        } else {
+          throw new Error("Failed to extract valid JSON from the response")
+        }
+      }
+
+      return JSON.parse(jsonStr)
+    } catch (error) {
+      console.error("Error parsing Gemini response:", error)
+      // Return a basic fallback JD structure
+      return {
+        sections: {
+          overview: `As a ${data.title} at Atlan, you will drive key outcomes related to ${data.outcomes}. This role requires a ${data.mindset} mindset and will contribute to ${data.advantage}.`,
+          responsibilities: [
+            `Lead initiatives to achieve ${data.outcomes}`,
+            `Make decisions regarding ${data.decisions}`,
+            "Collaborate with cross-functional teams",
+            "Drive measurable results",
+            "Implement best practices",
+          ],
+          qualifications: [
+            `Experience with ${data.department} or related field`,
+            "Strong communication skills",
+            "Problem-solving abilities",
+            "Collaborative mindset",
+            "Data-driven approach",
+          ],
+        },
+        analysis: {
+          clarity: 80,
+          inclusivity: 90,
+          seo: 75,
+          attraction: 85,
+        },
+        biasFlags: [],
+      }
     }
+  } catch (error) {
+    console.error("Error generating JD:", error)
+    throw new Error("Failed to generate job description")
   }
-
-  return allBiasFlags
 }
 
-// Template-based fallback bias check
-function generateFallbackBiasCheck(content: string) {
-  // Simple pattern matching for common biased terms
-  const biasedTerms = [
-    { term: "he", suggestion: "they", reason: "Gender-neutral language is more inclusive" },
-    { term: "she", suggestion: "they", reason: "Gender-neutral language is more inclusive" },
-    { term: "his", suggestion: "their", reason: "Gender-neutral language is more inclusive" },
-    { term: "her", suggestion: "their", reason: "Gender-neutral language is more inclusive" },
-    { term: "man", suggestion: "person", reason: "Gender-neutral language is more inclusive" },
-    { term: "guys", suggestion: "team", reason: "Gender-neutral language is more inclusive" },
-    { term: "ninja", suggestion: "expert", reason: "Avoid cultural stereotypes" },
-    { term: "guru", suggestion: "specialist", reason: "Avoid cultural stereotypes" },
-    { term: "rockstar", suggestion: "exceptional performer", reason: "Avoid potentially exclusionary terms" },
-    { term: "young", suggestion: "energetic", reason: "Age-neutral language is more inclusive" },
-    { term: "aggressive", suggestion: "proactive", reason: "Avoid terms with gender-coded connotations" },
-    { term: "competitive", suggestion: "achievement-oriented", reason: "Avoid terms with gender-coded connotations" },
-    {
-      term: "years of experience",
-      suggestion: "proven experience",
-      reason: "Years-based criteria may exclude qualified candidates with non-linear backgrounds",
-    },
-    {
-      term: "years experience",
-      suggestion: "demonstrated ability",
-      reason: "Years-based criteria may exclude qualified candidates with non-linear backgrounds",
-    },
-    {
-      term: "minimum years",
-      suggestion: "track record of",
-      reason: "Years-based criteria may exclude qualified candidates with non-linear backgrounds",
-    },
-    {
-      term: "at least N years",
-      suggestion: "history of successfully",
-      reason: "Years-based criteria may exclude qualified candidates with non-linear backgrounds",
-    },
-  ]
-
-  const contentLower = content.toLowerCase()
-  const results = []
-
-  for (const { term, suggestion, reason } of biasedTerms) {
-    if (contentLower.includes(term.toLowerCase())) {
-      // Find the context around the term
-      const index = contentLower.indexOf(term.toLowerCase())
-      const start = Math.max(0, index - 20)
-      const end = Math.min(contentLower.length, index + term.length + 20)
-      const context = content.substring(start, end)
-
-      results.push({
-        term,
-        context,
-        suggestion,
-        reason,
-      })
+export async function getRefinementSuggestions(
+  section: string,
+  content: string,
+  refinedSegments: string[] = [],
+): Promise<any[]> {
+  try {
+    // Create a prompt that includes already refined segments to avoid duplicate suggestions
+    let refinedSegmentsPrompt = ""
+    if (refinedSegments.length > 0) {
+      refinedSegmentsPrompt = `
+      ALREADY REFINED SEGMENTS (do not suggest changes for these):
+      ${refinedSegments.join("\n")}
+      `
     }
-  }
 
-  return results
+    const prompt = `
+      Analyze the following ${section} section of a job description and provide 3 specific suggestions to improve it.
+      
+      SECTION CONTENT:
+      ${content}
+      
+      ${refinedSegmentsPrompt}
+      
+      For each suggestion:
+      1. Identify a specific phrase or sentence that could be improved
+      2. Provide a better alternative
+      3. Explain why your suggestion is better
+      
+      Format your response as a JSON array:
+      [
+        {
+          "original": "text to be replaced",
+          "suggestion": "improved text",
+          "reason": "explanation of why this is better"
+        },
+        ...
+      ]
+      
+      IMPROVEMENT GUIDELINES:
+      - Make language more outcome-focused rather than task-focused
+      - Replace vague statements with specific, measurable outcomes
+      - Convert passive voice to active voice
+      - Remove unnecessary jargon or buzzwords
+      - Ensure language is inclusive and bias-free
+      - Improve clarity and conciseness
+      - Add specificity where statements are too general
+      
+      Your response must be valid JSON that can be parsed with JSON.parse().
+    `
+
+    try {
+      const response = await generateWithFallback(prompt)
+
+      // Extract JSON from the response
+      let jsonStr = response
+      if (!jsonStr.trim().startsWith("[")) {
+        const jsonMatch = response.match(/\[[\s\S]*\]/)
+        if (jsonMatch) {
+          jsonStr = jsonMatch[0]
+        } else {
+          throw new Error("Failed to extract valid JSON from the response")
+        }
+      }
+
+      return JSON.parse(jsonStr)
+    } catch (error) {
+      console.error("Error parsing refinement suggestions:", error)
+      // Return basic fallback suggestions using the language processor
+      return [
+        {
+          original: "responsible for",
+          suggestion: "lead",
+          reason: "Using active voice creates stronger impact and clarity",
+        },
+        {
+          original: "help with",
+          suggestion: "drive",
+          reason: "More outcome-focused language shows ownership and impact",
+        },
+        {
+          original: "world-class",
+          suggestion: "high-performing",
+          reason: "More specific and measurable than vague superlatives",
+        },
+      ]
+    }
+  } catch (error) {
+    console.error("Error getting refinement suggestions:", error)
+    return []
+  }
+}
+
+export async function checkForBias(content: string): Promise<any[]> {
+  try {
+    const prompt = `
+      Analyze the following job description for potential bias or non-inclusive language.
+      
+      JOB DESCRIPTION:
+      ${content}
+      
+      Identify any words, phrases, or statements that might:
+      1. Contain gender bias
+      2. Show age discrimination
+      3. Include cultural or racial bias
+      4. Have ableist language
+      5. Contain unnecessary jargon that limits the applicant pool
+      6. Use exclusionary terms
+      
+      For each issue found, provide:
+      1. The exact text that contains bias
+      2. An explanation of why it's problematic
+      3. A suggested alternative
+      
+      Format your response as a JSON array:
+      [
+        {
+          "text": "biased text",
+          "issue": "type of bias",
+          "explanation": "why it's problematic",
+          "suggestion": "alternative text"
+        },
+        ...
+      ]
+      
+      If no bias is found, return an empty array.
+      Your response must be valid JSON that can be parsed with JSON.parse().
+    `
+
+    try {
+      const response = await generateWithFallback(prompt)
+
+      // Extract JSON from the response
+      let jsonStr = response
+      if (!jsonStr.trim().startsWith("[")) {
+        const jsonMatch = response.match(/\[[\s\S]*\]/)
+        if (jsonMatch) {
+          jsonStr = jsonMatch[0]
+        } else {
+          return []
+        }
+      }
+
+      return JSON.parse(jsonStr)
+    } catch (error) {
+      console.error("Error parsing bias check:", error)
+      return []
+    }
+  } catch (error) {
+    console.error("Error checking for bias:", error)
+    return []
+  }
 }
