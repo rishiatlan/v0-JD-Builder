@@ -24,7 +24,7 @@ import {
   BarChart,
 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
-import { enhanceExistingJD } from "@/app/actions"
+import { enhanceExistingJD, analyzeUploadedDocument } from "@/app/actions"
 import { EnhancedDocumentParser } from "@/components/enhanced-document-parser"
 import { FallbackDocumentParser } from "@/components/fallback-document-parser"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -762,7 +762,13 @@ export function JDBuilderForm() {
                     Drag and drop or click to upload a PDF, DOCX, or TXT file
                   </p>
                 </div>
-                <Input id="document-upload" type="file" className="hidden" accept=".pdf,.docx,.txt" />
+                <Input
+                  id="document-upload"
+                  type="file"
+                  className="hidden"
+                  accept=".pdf,.docx,.txt"
+                  onChange={handleEnhanceFileChange}
+                />
                 <Button
                   onClick={() => document.getElementById("document-upload")?.click()}
                   variant="outline"
@@ -773,14 +779,199 @@ export function JDBuilderForm() {
               </div>
             </div>
 
+            {enhanceFile && useEnhancedParser && (
+              <EnhancedDocumentParser
+                file={enhanceFile}
+                onContentParsed={handleEnhanceContentParsed}
+                onError={(error) => {
+                  setEnhanceError(error)
+                  toast({
+                    title: "Error",
+                    description: error,
+                    variant: "destructive",
+                  })
+                }}
+                onParsingStart={() => setIsParsing(true)}
+                onParsingComplete={() => setIsParsing(false)}
+              />
+            )}
+
+            {enhanceFile && !useEnhancedParser && (
+              <FallbackDocumentParser
+                file={enhanceFile}
+                onContentParsed={handleEnhanceContentParsed}
+                onError={(error) => {
+                  setEnhanceError(error)
+                  toast({
+                    title: "Error",
+                    description: error,
+                    variant: "destructive",
+                  })
+                }}
+                onParsingStart={() => setIsParsing(true)}
+                onParsingComplete={() => setIsParsing(false)}
+              />
+            )}
+
+            {fileInfo && (
+              <div className="bg-slate-100 p-4 rounded-lg mt-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <FileType className="h-5 w-5 text-atlan-primary mr-2" />
+                    <div>
+                      <span className="text-sm font-medium">{fileInfo.name}</span>
+                      <div className="text-xs text-slate-500 mt-0.5">
+                        {fileInfo.type} • {fileInfo.size}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    {enhanceContent && !isParsing && !processingChunks && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowEnhancePreview(!showEnhancePreview)}
+                        className="text-slate-500 hover:text-slate-700 flex items-center"
+                      >
+                        <Eye className="h-4 w-4 mr-1" />
+                        {showEnhancePreview ? "Hide Preview" : "Preview"}
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setEnhanceFile(null)
+                        setEnhanceContent(null)
+                        setEnhanceError(null)
+                        setFileInfo(null)
+                        setShowEnhancePreview(false)
+
+                        // Release memory
+                        contentRef.current = null
+
+                        // Abort any ongoing operations
+                        if (abortControllerRef.current) {
+                          abortControllerRef.current.abort()
+                          abortControllerRef.current = null
+                        }
+                      }}
+                      className="text-slate-500 hover:text-slate-700"
+                      disabled={isParsing || processingChunks}
+                    >
+                      Remove
+                    </Button>
+                  </div>
+                </div>
+                {isParsing && (
+                  <div className="mt-3">
+                    <div className="flex items-center mb-1">
+                      <Loader2 className="h-3 w-3 animate-spin text-atlan-primary mr-2" />
+                      <span className="text-xs text-slate-600">Parsing document...</span>
+                    </div>
+                    <Progress value={45} className="h-1" />
+                  </div>
+                )}
+                {processingChunks && (
+                  <div className="mt-3">
+                    <div className="flex items-center mb-1">
+                      <Loader2 className="h-3 w-3 animate-spin text-atlan-primary mr-2" />
+                      <span className="text-xs text-slate-600">
+                        {processingStage
+                          ? `${processingStage} (${processingProgress}%)`
+                          : `Processing document (${processingProgress}%)...`}
+                      </span>
+                    </div>
+                    <Progress value={processingProgress} className="h-1" />
+                    {usingWorker && (
+                      <div className="flex items-center mt-1">
+                        <Cpu className="h-3 w-3 text-green-500 mr-1" />
+                        <span className="text-xs text-green-600">Using worker pool</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Document Preview for Upload */}
+            {showEnhancePreview && enhanceContent && activeTab === "upload" && (
+              <ProgressiveDocumentPreview content={enhanceContent} maxHeight={400} className="mt-4" />
+            )}
+
             <Button
               className="w-full bg-atlan-primary hover:bg-atlan-primary-dark text-white"
               onClick={() => {
-                window.location.href = "/builder"
+                if (!enhanceContent) {
+                  toast({
+                    title: "Error",
+                    description: "Please upload a document first.",
+                    variant: "destructive",
+                  })
+                  return
+                }
+
+                setIsEnhancing(true)
+                setEnhanceError(null)
+
+                // Call the analyzeUploadedDocument action
+                analyzeUploadedDocument(enhanceContent)
+                  .then((result) => {
+                    setIsEnhancing(false)
+
+                    if (result.success) {
+                      // Store the data in session storage
+                      if (result.data) {
+                        const id = Date.now().toString()
+                        try {
+                          sessionStorage.setItem(`analyzed_doc_${id}`, JSON.stringify(result.data))
+                        } catch (storageError) {
+                          console.error("Error storing in session storage:", storageError)
+                        }
+
+                        // Redirect to the builder page
+                        window.location.href = `/builder?analyzed=true&id=${id}${
+                          result.warning ? `&warning=${encodeURIComponent(result.warning)}` : ""
+                        }`
+                      }
+                    } else {
+                      setEnhanceError(result.error || "Failed to analyze document.")
+                      toast({
+                        title: "Error",
+                        description: result.error || "Failed to analyze document.",
+                        variant: "destructive",
+                      })
+                    }
+                  })
+                  .catch((error) => {
+                    console.error("Error analyzing document:", error)
+                    setIsEnhancing(false)
+                    setEnhanceError("An unexpected error occurred. Please try again.")
+                    toast({
+                      title: "Error",
+                      description: "An unexpected error occurred. Please try again.",
+                      variant: "destructive",
+                    })
+                  })
               }}
+              disabled={!enhanceContent || isParsing || processingChunks || isEnhancing}
             >
-              Analyze Document
+              {isEnhancing ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Analyzing Document...
+                </>
+              ) : (
+                "Analyze Document"
+              )}
             </Button>
+
+            {enhanceError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded-md flex items-start">
+                <AlertCircle className="h-5 w-5 mr-2 flex-shrink-0 mt-0.5" />
+                <p className="text-sm">{enhanceError}</p>
+              </div>
+            )}
           </div>
         )}
 

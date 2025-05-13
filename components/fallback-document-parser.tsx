@@ -119,38 +119,52 @@ export function FallbackDocumentParser({
     const parseFileMainThread = async () => {
       setStage("Parsing in main thread")
 
-      // For large files, use streaming approach
-      if (file.size > 1 * 1024 * 1024) {
-        // 1MB threshold
-        const content = await parseFileStreaming()
-        onContentParsed(content)
-        parsedFileRef.current = file
-      } else {
-        // For smaller files, use the simple approach
-        if (file.type === "text/plain") {
-          const content = await readFileAsText(file)
+      try {
+        // For large files, use streaming approach
+        if (file.size > 1 * 1024 * 1024) {
+          // 1MB threshold
+          const content = await parseFileStreaming()
           onContentParsed(content)
           parsedFileRef.current = file
-        } else if (
-          file.type === "application/pdf" ||
-          file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
-          file.type === "application/msword"
-        ) {
-          // For PDFs and Word docs, we'll warn the user and try to extract text
-          const content = await readFileAsText(file)
-
-          if (content.length < 100 || !isReadableText(content)) {
-            onContentParsed(
-              "Document content could not be fully extracted. Please consider copying and pasting the content manually.",
-            )
-            onError("Limited document support. Some content may be missing or unreadable.")
-          } else {
-            onContentParsed(content)
-          }
-          parsedFileRef.current = file
         } else {
-          throw new Error("Unsupported file type")
+          // For smaller files, use the simple approach
+          if (file.type === "text/plain") {
+            const content = await readFileAsText(file)
+            onContentParsed(content)
+            parsedFileRef.current = file
+          } else if (file.type === "application/pdf") {
+            // For PDFs, we'll warn the user and try to extract text
+            const content = await readFileAsText(file)
+
+            if (content.length < 100 || !isReadableText(content)) {
+              onContentParsed(
+                "PDF content could not be fully extracted in basic mode. For better results, try using a modern browser that supports enhanced parsing.",
+              )
+              onError("Limited PDF support in basic mode. Some content may be missing or unreadable.")
+            } else {
+              onContentParsed(content)
+            }
+            parsedFileRef.current = file
+          } else if (
+            file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+            file.type === "application/msword"
+          ) {
+            // For Word docs, provide a more helpful message
+            onContentParsed(
+              "DOCX/DOC parsing requires the enhanced parser which isn't available in your browser. " +
+                "Please try using a different browser, or copy and paste the content manually.",
+            )
+            onError(
+              "DOCX/DOC parsing is not supported in basic mode. Please use a modern browser or paste content manually.",
+            )
+            parsedFileRef.current = file
+          } else {
+            throw new Error("Unsupported file type")
+          }
         }
+      } catch (error) {
+        console.error("Error in main thread parsing:", error)
+        throw error
       }
     }
 

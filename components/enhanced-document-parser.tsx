@@ -137,15 +137,42 @@ export function EnhancedDocumentParser({
   // Parse DOCX file
   const parseDocxFile = async (file: File): Promise<string> => {
     try {
+      setStage("Parsing DOCX document")
+
       // Dynamically import mammoth
       const mammoth = await import("mammoth")
 
+      // Read the file as an array buffer
       const arrayBuffer = await file.arrayBuffer()
+
+      // Update progress
+      setProgress(30)
+      setStage("Extracting text from DOCX")
+
+      // Extract text from the DOCX file
       const result = await mammoth.extractRawText({ arrayBuffer })
+
+      // Update progress
+      setProgress(70)
+      setStage("Processing extracted text")
+
+      // Check if we got valid content
+      if (!result.value || result.value.trim().length === 0) {
+        throw new Error("No text content could be extracted from the DOCX file.")
+      }
+
+      // If there are any warnings, log them
+      if (result.messages && result.messages.length > 0) {
+        console.warn("DOCX parsing warnings:", result.messages)
+      }
+
+      // Update progress
+      setProgress(100)
+
       return result.value
     } catch (error) {
       console.error("DOCX parsing error:", error)
-      throw new Error("Failed to parse DOCX file. The file may be corrupted.")
+      throw new Error("Failed to parse DOCX file. The file may be corrupted or in an unsupported format.")
     }
   }
 
