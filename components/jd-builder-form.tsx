@@ -901,7 +901,7 @@ export function JDBuilderForm() {
 
             <Button
               className="w-full bg-atlan-primary hover:bg-atlan-primary-dark text-white"
-              onClick={() => {
+              onClick={async () => {
                 if (!enhanceContent) {
                   toast({
                     title: "Error",
@@ -913,53 +913,67 @@ export function JDBuilderForm() {
 
                 setIsEnhancing(true)
                 setEnhanceError(null)
+                setProcessingProgress(0)
+                setProcessingStage("Analyzing document")
 
-                // Call the analyzeUploadedDocument action
-                analyzeUploadedDocument(enhanceContent)
-                  .then((result) => {
-                    setIsEnhancing(false)
+                try {
+                  // Call the analyzeUploadedDocument action
+                  const result = await analyzeUploadedDocument(enhanceContent)
 
-                    if (result.success) {
-                      // Store the data in session storage
-                      if (result.data) {
-                        const id = Date.now().toString()
-                        try {
-                          sessionStorage.setItem(`analyzed_doc_${id}`, JSON.stringify(result.data))
-                        } catch (storageError) {
-                          console.error("Error storing in session storage:", storageError)
-                        }
+                  if (result.success) {
+                    // Store the data in session storage
+                    if (result.data) {
+                      const id = Date.now().toString()
+                      try {
+                        sessionStorage.setItem(`analyzed_doc_${id}`, JSON.stringify(result.data))
 
-                        // Redirect to the builder page
+                        // Show success notification
+                        toast({
+                          title: "Document Analyzed Successfully",
+                          description: "Your document has been analyzed and is ready for refinement.",
+                        })
+
+                        // Redirect to the builder page with analyzed=true parameter
                         window.location.href = `/builder?analyzed=true&id=${id}${
                           result.warning ? `&warning=${encodeURIComponent(result.warning)}` : ""
                         }`
+                      } catch (storageError) {
+                        console.error("Error storing in session storage:", storageError)
+                        setEnhanceError("Failed to store analysis results. Please try again.")
+                        setIsEnhancing(false)
                       }
                     } else {
-                      setEnhanceError(result.error || "Failed to analyze document.")
-                      toast({
-                        title: "Error",
-                        description: result.error || "Failed to analyze document.",
-                        variant: "destructive",
-                      })
+                      setEnhanceError("No data returned from analysis. Please try again.")
+                      setIsEnhancing(false)
                     }
-                  })
-                  .catch((error) => {
-                    console.error("Error analyzing document:", error)
-                    setIsEnhancing(false)
-                    setEnhanceError("An unexpected error occurred. Please try again.")
+                  } else {
+                    setEnhanceError(result.error || "Failed to analyze document.")
                     toast({
                       title: "Error",
-                      description: "An unexpected error occurred. Please try again.",
+                      description: result.error || "Failed to analyze document.",
                       variant: "destructive",
                     })
+                    setIsEnhancing(false)
+                  }
+                } catch (error) {
+                  console.error("Error analyzing document:", error)
+                  setEnhanceError("An unexpected error occurred. Please try again.")
+                  toast({
+                    title: "Error",
+                    description: "An unexpected error occurred. Please try again.",
+                    variant: "destructive",
                   })
+                  setIsEnhancing(false)
+                } finally {
+                  setProcessingStage(undefined)
+                }
               }}
               disabled={!enhanceContent || isParsing || processingChunks || isEnhancing}
             >
               {isEnhancing ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Analyzing Document...
+                  {processingStage || "Analyzing Document..."}
                 </>
               ) : (
                 "Analyze Document"

@@ -405,6 +405,13 @@ export async function analyzeUploadedDocument(fileContent: string) {
             sharpnessScores,
             improvementSuggestions,
           },
+          // Add original extracted info for reference
+          extractedInfo: extractedInfo,
+          // Add source information
+          source: {
+            type: "document",
+            timestamp: Date.now(),
+          },
         },
       }
     } catch (error) {
@@ -416,7 +423,14 @@ export async function analyzeUploadedDocument(fileContent: string) {
 
       return {
         success: true,
-        data: fallbackJD,
+        data: {
+          ...fallbackJD,
+          source: {
+            type: "document",
+            timestamp: Date.now(),
+            fallback: true,
+          },
+        },
         warning: "Used fallback JD generation due to API limitations.",
       }
     }

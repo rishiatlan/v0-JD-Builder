@@ -166,6 +166,8 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
     setLastSubmitTime(now)
 
     try {
+      let result // Declare result here
+
       if (activeTab === "questionnaire") {
         console.log("Submitting questionnaire data:", debouncedFormData)
 
@@ -180,7 +182,7 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
         })
 
         // Call the server action
-        const result = await generateJD(formDataObj)
+        result = await generateJD(formDataObj)
         console.log("generateJD result:", result)
 
         if (result.success) {
@@ -204,7 +206,7 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
         console.log("Analyzing file content...")
 
         // Call the server action to analyze the document
-        const result = await analyzeUploadedDocument(fileContent)
+        result = await analyzeUploadedDocument(fileContent)
         console.log("analyzeUploadedDocument result:", result)
 
         if (result.success) {
@@ -241,6 +243,17 @@ export function IntakeForm({ onSubmit, isLoading, initialData }: IntakeFormProps
           description: "Please select a file to upload",
           variant: "destructive",
         })
+      }
+
+      // Add this code after the successful document analysis:
+      if (activeTab === "upload" && result?.success) {
+        // Store the analyzed document data with a specific key format
+        const analyzedId = `analyzed_jd_${Date.now()}`
+        sessionStorage.setItem(analyzedId, JSON.stringify(result.data))
+
+        // You might want to update the URL to include the analyzed parameter
+        // This would typically be done with router.push but since we're using
+        // the existing onSubmit callback, we'll let the parent component handle it
       }
     } catch (error) {
       console.error("Error submitting form:", error)

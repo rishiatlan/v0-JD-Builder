@@ -15,10 +15,13 @@ import { languageProcessor } from "@/lib/language-processor"
 import { Switch } from "@/components/ui/switch"
 import { Label } from "@/components/ui/label"
 
+// Add isAnalyzed prop to the component props
 interface JDRefinementProps {
   data: any
-  onComplete: (refinedData: any) => void
-  isLoading?: boolean
+  onComplete: (data: any) => void
+  isLoading: boolean
+  isEnhanced?: boolean
+  isAnalyzed?: boolean
 }
 
 // Interface for tracking applied suggestions
@@ -37,15 +40,37 @@ interface RefinedSegment {
   appliedAt: number
 }
 
+// Add this function if it doesn't exist:
+const saveAnalyzedData = (data: any) => {
+  try {
+    const jdId = `analyzed_jd_${Date.now()}`
+    sessionStorage.setItem(jdId, JSON.stringify(data))
+    return jdId
+  } catch (error) {
+    console.error("Error saving analyzed data:", error)
+    return null
+  }
+}
+
 export function JDRefinement({
   data,
   onComplete,
-  isLoading = false,
-}: {
-  data: any
-  onComplete: (data: any) => void
-  isLoading?: boolean
-}) {
+  isLoading,
+  isEnhanced = false,
+  isAnalyzed = false,
+}: JDRefinementProps) {
+  const { toast } = useToast()
+  // Add this at the beginning of the component
+  useEffect(() => {
+    // If this is an analyzed document, show a welcome message
+    if (isAnalyzed) {
+      toast({
+        title: "Document Analysis Complete",
+        description: "Your document has been analyzed and is ready for refinement.",
+      })
+    }
+  }, [isAnalyzed, toast])
+
   const [activeTab, setActiveTab] = useState<string>("overview")
   const [sections, setSections] = useState(data.sections)
   const [suggestions, setSuggestions] = useState(data.suggestions || [])
@@ -58,7 +83,6 @@ export function JDRefinement({
   const [improvementSuggestions, setImprovementSuggestions] = useState<Record<string, string[]>>({})
   const [processingResults, setProcessingResults] = useState<Record<string, any>>({})
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const { toast } = useToast()
 
   // Store original text for comparison
   const originalTextRef = useRef<Record<string, string>>({})
@@ -272,6 +296,12 @@ export function JDRefinement({
       }
 
       console.log("Finalized data prepared:", finalData)
+
+      // Save analyzed data to session storage
+      const analyzedDataId = saveAnalyzedData(finalData)
+      if (analyzedDataId) {
+        console.log(`Analyzed data saved with ID: ${analyzedDataId}`)
+      }
 
       // Call the onComplete callback with the finalized data
       onComplete(finalData)

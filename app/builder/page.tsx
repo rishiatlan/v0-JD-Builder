@@ -8,46 +8,79 @@ import { JDRefinement } from "@/components/jd-refinement"
 import { JDOutput } from "@/components/jd-output"
 import { EnhancedJDSummary } from "@/components/enhanced-jd-summary"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { AlertTriangle } from "lucide-react"
+import { AlertTriangle, Loader2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 
 export default function BuilderPage() {
   const [step, setStep] = useState(1)
   const [jdData, setJdData] = useState<any>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
   const [isEnhanced, setIsEnhanced] = useState(false)
+  const [isAnalyzed, setIsAnalyzed] = useState(false)
   const [warning, setWarning] = useState<string | null>(null)
+  const [dataLoadError, setDataLoadError] = useState<string | null>(null)
   const searchParams = useSearchParams()
   const { toast } = useToast()
 
   useEffect(() => {
-    // Check if we're coming from an enhanced JD
-    const enhanced = searchParams.get("enhanced")
-    const id = searchParams.get("id")
-    const warningParam = searchParams.get("warning")
+    const loadData = async () => {
+      setIsLoading(true)
+      setDataLoadError(null)
 
-    if (warningParam) {
-      setWarning(decodeURIComponent(warningParam))
-    }
+      // Check if we're coming from an enhanced or analyzed JD
+      const enhanced = searchParams.get("enhanced")
+      const analyzed = searchParams.get("analyzed")
+      const id = searchParams.get("id")
+      const warningParam = searchParams.get("warning")
 
-    if (enhanced === "true" && id) {
-      setIsEnhanced(true)
+      if (warningParam) {
+        setWarning(decodeURIComponent(warningParam))
+      }
 
-      // In a real app, this would fetch from a database
-      // For now, we'll use session storage
-      const enhancedJDData = sessionStorage.getItem(`enhanced_jd_${id}`)
+      if ((enhanced === "true" || analyzed === "true") && id) {
+        // Set the appropriate flags
+        setIsEnhanced(enhanced === "true")
+        setIsAnalyzed(analyzed === "true")
 
-      if (enhancedJDData) {
-        try {
-          const parsedData = JSON.parse(enhancedJDData)
-          setJdData(parsedData)
-          setStep(2) // Go directly to refinement step
-        } catch (error) {
-          console.error("Error parsing enhanced JD data:", error)
+        // Try to get data from session storage
+        const storageKey = enhanced === "true" ? `enhanced_jd_${id}` : `analyzed_doc_${id}`
+        const storedData = sessionStorage.getItem(storageKey)
+
+        if (storedData) {
+          try {
+            const parsedData = JSON.parse(storedData)
+            setJdData(parsedData)
+            setStep(2) // Go directly to refinement step
+
+            console.log(`Successfully loaded ${enhanced ? "enhanced" : "analyzed"} JD data:`, parsedData)
+          } catch (error) {
+            console.error(`Error parsing ${enhanced ? "enhanced" : "analyzed"} JD data:`, error)
+            setDataLoadError(
+              `Could not load the ${enhanced ? "enhanced" : "analyzed"} job description. Please try again.`,
+            )
+            toast({
+              title: "Error",
+              description: `Could not load the ${enhanced ? "enhanced" : "analyzed"} job description. Please try again.`,
+              variant: "destructive",
+            })
+          }
+        } else {
+          // Handle case where data is not found
+          const errorMsg = `The ${enhanced ? "enhanced" : "analyzed"} job description could not be found. It may have expired.`
+          setDataLoadError(errorMsg)
+          toast({
+            title: "Data Not Found",
+            description: errorMsg,
+            variant: "destructive",
+          })
         }
       }
+
+      setIsLoading(false)
     }
-  }, [searchParams])
+
+    loadData()
+  }, [searchParams, toast])
 
   const handleIntakeSubmit = (data: any, warning?: string) => {
     setJdData(data)
@@ -107,6 +140,14 @@ export default function BuilderPage() {
           </Alert>
         )}
 
+        {dataLoadError && (
+          <Alert variant="destructive" className="mb-6 max-w-4xl mx-auto">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>{dataLoadError}</AlertDescription>
+          </Alert>
+        )}
+
         {/* Step Indicator */}
         <div className="max-w-4xl mx-auto mb-8">
           <div className="flex items-center justify-between">
@@ -146,19 +187,30 @@ export default function BuilderPage() {
         </div>
 
         <div className="max-w-4xl mx-auto">
-          {isEnhanced && jdData && step === 2 && <EnhancedJDSummary data={jdData} onContinue={() => setStep(2)} />}
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-atlan-primary mb-4" />
+              <p className="text-slate-600">Loading job description data...</p>
+            </div>
+          ) : (
+            <>
+              {isEnhanced && jdData && step === 2 && <EnhancedJDSummary data={jdData} onContinue={() => setStep(2)} />}
 
-          {step === 1 && <IntakeForm onSubmit={handleIntakeSubmit} isLoading={isLoading} />}
+              {step === 1 && <IntakeForm onSubmit={handleIntakeSubmit} isLoading={isLoading} />}
 
-          {step === 2 && jdData && !isEnhanced && (
-            <JDRefinement data={jdData} onComplete={handleRefinementComplete} isLoading={isLoading} />
+              {step === 2 && jdData && (
+                <JDRefinement
+                  data={jdData}
+                  onComplete={handleRefinementComplete}
+                  isLoading={isLoading}
+                  isAnalyzed={isAnalyzed}
+                  isEnhanced={isEnhanced}
+                />
+              )}
+
+              {step === 3 && jdData && <JDOutput data={jdData} />}
+            </>
           )}
-
-          {step === 2 && jdData && isEnhanced && (
-            <JDRefinement data={jdData} onComplete={handleRefinementComplete} isLoading={isLoading} />
-          )}
-
-          {step === 3 && jdData && <JDOutput data={jdData} />}
         </div>
       </main>
     </div>
