@@ -1,8 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useSearchParams } from "next/navigation"
-import { Navbar } from "@/components/navbar"
+import { useSearchParams, useRouter } from "next/navigation"
 import { IntakeForm } from "@/components/intake-form"
 import { JDRefinement } from "@/components/jd-refinement"
 import { JDOutput } from "@/components/jd-output"
@@ -10,6 +9,7 @@ import { EnhancedJDSummary } from "@/components/enhanced-jd-summary"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertTriangle, Loader2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
+import { ErrorBoundary } from "@/components/error-boundary"
 
 export default function BuilderPage() {
   const [step, setStep] = useState(1)
@@ -20,6 +20,7 @@ export default function BuilderPage() {
   const [warning, setWarning] = useState<string | null>(null)
   const [dataLoadError, setDataLoadError] = useState<string | null>(null)
   const searchParams = useSearchParams()
+  const router = useRouter()
   const { toast } = useToast()
 
   useEffect(() => {
@@ -122,9 +123,18 @@ export default function BuilderPage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-white">
-      <Navbar />
-      <main className="flex-1 container mx-auto px-4 py-8">
+    <ErrorBoundary
+      fallback={
+        <div className="container mx-auto px-4 py-8 text-center">
+          <h2 className="text-2xl font-bold text-red-600 mb-4">Something went wrong</h2>
+          <p className="mb-4">We encountered an error while processing your request.</p>
+          <button onClick={() => window.location.reload()} className="px-4 py-2 bg-atlan-primary text-white rounded-md">
+            Reload Page
+          </button>
+        </div>
+      }
+    >
+      <div className="container mx-auto px-4 py-8">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold text-atlan-primary mb-2">Atlan JD Builder</h1>
           <p className="text-slate-600">
@@ -212,7 +222,7 @@ export default function BuilderPage() {
             </>
           )}
         </div>
-      </main>
-    </div>
+      </div>
+    </ErrorBoundary>
   )
 }
