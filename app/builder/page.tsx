@@ -10,6 +10,8 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { AlertTriangle, Loader2 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import { ErrorBoundary } from "@/components/error-boundary"
+import { SimpleDocxParser } from "@/components/simple-docx-parser"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 export default function BuilderPage() {
   const [step, setStep] = useState(1)
@@ -19,6 +21,8 @@ export default function BuilderPage() {
   const [isAnalyzed, setIsAnalyzed] = useState(false)
   const [warning, setWarning] = useState<string | null>(null)
   const [dataLoadError, setDataLoadError] = useState<string | null>(null)
+  const [documentContent, setDocumentContent] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<string>("questionnaire")
   const searchParams = useSearchParams()
   const router = useRouter()
   const { toast } = useToast()
@@ -122,6 +126,27 @@ export default function BuilderPage() {
     }
   }
 
+  const handleDocumentParsed = (content: string) => {
+    setDocumentContent(content)
+
+    // Pre-fill the intake form with the parsed content
+    // This is just a simple example - you might want to do more sophisticated processing
+    const data = {
+      role: "",
+      department: "",
+      outcomes: content.substring(0, 500), // Just use the first 500 chars as an example
+      mindset: "",
+      advantage: "",
+      decisions: "",
+    }
+
+    setJdData(data)
+    toast({
+      title: "Document Parsed",
+      description: "Document content has been extracted. You can now proceed with the analysis.",
+    })
+  }
+
   return (
     <ErrorBoundary
       fallback={
@@ -206,7 +231,51 @@ export default function BuilderPage() {
             <>
               {isEnhanced && jdData && step === 2 && <EnhancedJDSummary data={jdData} onContinue={() => setStep(2)} />}
 
-              {step === 1 && <IntakeForm onSubmit={handleIntakeSubmit} isLoading={isLoading} />}
+              {step === 1 && (
+                <Tabs defaultValue="questionnaire" value={activeTab} onValueChange={setActiveTab}>
+                  <TabsList className="grid w-full grid-cols-3 mb-8">
+                    <TabsTrigger value="questionnaire">Dynamic Questionnaire</TabsTrigger>
+                    <TabsTrigger value="upload">Upload Document</TabsTrigger>
+                    <TabsTrigger value="enhance">Enhance JD</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="questionnaire">
+                    <IntakeForm onSubmit={handleIntakeSubmit} isLoading={isLoading} />
+                  </TabsContent>
+
+                  <TabsContent value="upload">
+                    <div className="space-y-6">
+                      <SimpleDocxParser onParsedContent={handleDocumentParsed} />
+
+                      {documentContent && (
+                        <div className="mt-6 flex justify-center">
+                          <button
+                            onClick={() => setStep(2)}
+                            className="px-6 py-2 bg-atlan-primary text-white rounded-md hover:bg-atlan-primary/90 transition-colors"
+                          >
+                            Continue to Analysis
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="enhance">
+                    <div className="text-center py-12">
+                      <h3 className="text-xl font-medium mb-4">Enhance an existing job description</h3>
+                      <p className="text-slate-600 mb-6">
+                        Upload an existing job description to enhance it with Atlan&apos;s standards.
+                      </p>
+                      <button
+                        onClick={() => setActiveTab("upload")}
+                        className="px-6 py-2 bg-atlan-primary text-white rounded-md hover:bg-atlan-primary/90 transition-colors"
+                      >
+                        Upload JD Document
+                      </button>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              )}
 
               {step === 2 && jdData && (
                 <JDRefinement
