@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react"
 import { logMemoryUsage } from "@/lib/memory-optimization"
 import useWorkerPool from "@/hooks/use-worker-pool"
 import { TaskPriority } from "@/lib/worker-pool"
+import { createDocumentParserWorker, parseDocxWithWorker, terminateWorker } from "@/lib/worker-manager"
 
 interface EnhancedDocumentParserProps {
   file: File | null
@@ -25,6 +26,7 @@ export function EnhancedDocumentParser({
   const [isProcessing, setIsProcessing] = useState(false)
   const [progress, setProgress] = useState(0)
   const [stage, setStage] = useState<string | undefined>(undefined)
+  const workerRef = useRef<Worker | null>(null)
   const {
     parseTextFile,
     parsePdfFile,
@@ -33,6 +35,19 @@ export function EnhancedDocumentParser({
     stage: poolStage,
     error: poolError,
   } = useWorkerPool()
+
+  // Cleanup function for worker
+  const cleanupWorker = () => {
+    if (workerRef.current) {
+      terminateWorker(workerRef.current)
+      workerRef.current = null
+    }
+  }
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return cleanupWorker
+  }, [])
 
   useEffect(() => {
     // Only parse if we have a file and it's different from the last one we parsed
@@ -105,15 +120,64 @@ export function EnhancedDocumentParser({
           file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
           file.type === "application/msword"
         ) {
-          // For DOCX files, we'll fall back to the main thread for now
-          // In a real implementation, you would add DOCX parsing to the worker
-          content = await parseDocxFile(file)
+          // For DOCX files, we'll use our specialized DOCX parser
+          setStage("Parsing DOCX document")
 
-          if (content) {
-            onContentParsed(content)
-            parsedFileRef.current = file
-          } else {
-            throw new Error("Failed to extract content from file")
+          try {
+            // Create a worker if we don't have one
+            if (!workerRef.current) {
+              workerRef.current = createDocumentParserWorker()
+            }
+
+            if (workerRef.current) {
+              // Use our specialized DOCX parser
+              content = await parseDocxWithWorker(
+                workerRef.current,
+                file,
+                (progress) => {
+                  setProgress(progress)
+                },
+                (error) => {
+                  console.error("DOCX parsing error:", error)
+                  onError(error)
+                },
+              )
+
+              if (content) {
+                onContentParsed(content)
+                parsedFileRef.current = file
+              } else {
+                throw new Error("Failed to extract content from DOCX file")
+              }
+            } else {
+              // Fallback to direct mammoth usage if worker creation failed
+              content = await parseDocxFile(file)
+
+              if (content) {
+                onContentParsed(content)
+                parsedFileRef.current = file
+              } else {
+                throw new Error("Failed to extract content from DOCX file")
+              }
+            }
+          } catch (error) {
+            console.error("Error parsing DOCX:", error)
+            onError(error instanceof Error ? error.message : "Failed to parse DOCX file")
+
+            // Try the fallback method if the worker method failed
+            try {
+              content = await parseDocxFile(file)
+
+              if (content) {
+                onContentParsed(content)
+                parsedFileRef.current = file
+              } else {
+                throw new Error("Failed to extract content from DOCX file")
+              }
+            } catch (fallbackError) {
+              console.error("Fallback DOCX parsing error:", fallbackError)
+              onError("Failed to parse DOCX file. The file may be corrupted or in an unsupported format.")
+            }
           }
 
           setIsProcessing(false)

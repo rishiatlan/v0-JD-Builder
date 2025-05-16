@@ -1,303 +1,244 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { getWorkerPool, TaskPriority, TaskStatus, TaskType } from "@/lib/worker-pool"
+import { useState, useEffect, useCallback, useRef } from "react"
+import { getWorkerPool, TaskPriority } from "@/lib/worker-pool"
 
-interface UseWorkerPoolOptions {
-  onComplete?: (result: any) => void
-  onError?: (error: string) => void
-  onProgress?: (progress: number, stage?: string) => void
-  onStatusChange?: (status: TaskStatus) => void
+interface TaskOptions {
   priority?: TaskPriority
-  timeout?: number
+  onProgress?: (progress: number, stage?: string) => void
+  onComplete?: (result: string) => void
+  onError?: (error: string) => void
 }
 
-export function useWorkerPool() {
-  const [taskIds, setTaskIds] = useState<string[]>([])
+export default function useWorkerPool() {
   const [isProcessing, setIsProcessing] = useState(false)
   const [progress, setProgress] = useState(0)
   const [stage, setStage] = useState<string | undefined>(undefined)
   const [error, setError] = useState<string | null>(null)
+  const activeTasksRef = useRef<Set<string>>(new Set())
 
-  // Initialize worker pool
+  // Initialize worker pool on mount
   useEffect(() => {
     const workerPool = getWorkerPool()
     workerPool.initialize()
 
-    // Cleanup function
+    // Cleanup on unmount
     return () => {
-      // Cancel all tasks created by this hook
-      taskIds.forEach((taskId) => {
+      // Cancel all active tasks
+      activeTasksRef.current.forEach((taskId) => {
         workerPool.cancelTask(taskId)
       })
+      activeTasksRef.current.clear()
     }
-  }, [taskIds])
-
-  // Parse text file
-  const parseTextFile = useCallback((file: File, options?: UseWorkerPoolOptions) => {
-    setIsProcessing(true)
-    setProgress(0)
-    setStage(undefined)
-    setError(null)
-
-    const workerPool = getWorkerPool()
-
-    // Read file as ArrayBuffer
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const arrayBuffer = e.target?.result as ArrayBuffer
-
-      // Add task to worker pool
-      const taskId = workerPool.addTask({
-        type: TaskType.PARSE_TEXT,
-        priority: options?.priority || TaskPriority.NORMAL,
-        data: {
-          fileData: arrayBuffer,
-          fileName: file.name,
-          fileType: file.type,
-          chunkSize: 50000, // 50KB chunks
-        },
-        workerType: "document",
-        onProgress: (progress, stage) => {
-          setProgress(progress)
-          if (stage) setStage(stage)
-          options?.onProgress?.(progress, stage)
-        },
-        onComplete: (result) => {
-          setIsProcessing(false)
-          setProgress(100)
-          options?.onComplete?.(result)
-        },
-        onError: (error) => {
-          setIsProcessing(false)
-          setError(error)
-          options?.onError?.(error)
-        },
-        onStatusChange: (status) => {
-          if (status === TaskStatus.RUNNING) {
-            setIsProcessing(true)
-          } else if (
-            status === TaskStatus.COMPLETED ||
-            status === TaskStatus.FAILED ||
-            status === TaskStatus.CANCELLED
-          ) {
-            setIsProcessing(false)
-          }
-          options?.onStatusChange?.(status)
-        },
-        timeoutMs: options?.timeout || 5 * 60 * 1000, // Default 5 minutes
-      })
-
-      // Add task ID to list
-      setTaskIds((prev) => [...prev, taskId])
-    }
-
-    reader.onerror = () => {
-      setIsProcessing(false)
-      const error = "Failed to read file"
-      setError(error)
-      options?.onError?.(error)
-    }
-
-    reader.readAsArrayBuffer(file)
   }, [])
 
-  // Parse PDF file
-  const parsePdfFile = useCallback((file: File, options?: UseWorkerPoolOptions) => {
+  // Parse a text file
+  const parseTextFile = useCallback((file: File, options: TaskOptions = {}) => {
+    const workerPool = getWorkerPool()
     setIsProcessing(true)
     setProgress(0)
-    setStage(undefined)
+    setStage("Preparing text file")
     setError(null)
 
+    const taskId = workerPool.addDocumentParserTask({
+      type: "parseText",
+      file,
+      priority: options.priority || TaskPriority.NORMAL,
+      onProgress: (progress, stage) => {
+        setProgress(progress)
+        if (stage) setStage(stage)
+        options.onProgress?.(progress, stage)
+      },
+      onComplete: (result) => {
+        setIsProcessing(false)
+        setProgress(100)
+        setStage(undefined)
+        activeTasksRef.current.delete(taskId)
+        options.onComplete?.(result)
+      },
+      onError: (err) => {
+        setIsProcessing(false)
+        setError(err)
+        activeTasksRef.current.delete(taskId)
+        options.onError?.(err)
+      },
+    })
+
+    activeTasksRef.current.add(taskId)
+    return taskId
+  }, [])
+
+  // Parse a PDF file
+  const parsePdfFile = useCallback((file: File, options: TaskOptions = {}) => {
     const workerPool = getWorkerPool()
+    setIsProcessing(true)
+    setProgress(0)
+    setStage("Preparing PDF file")
+    setError(null)
 
-    // Read file as ArrayBuffer
-    const reader = new FileReader()
-    reader.onload = (e) => {
-      const arrayBuffer = e.target?.result as ArrayBuffer
+    const taskId = workerPool.addDocumentParserTask({
+      type: "parsePdf",
+      file,
+      priority: options.priority || TaskPriority.NORMAL,
+      onProgress: (progress, stage) => {
+        setProgress(progress)
+        if (stage) setStage(stage)
+        options.onProgress?.(progress, stage)
+      },
+      onComplete: (result) => {
+        setIsProcessing(false)
+        setProgress(100)
+        setStage(undefined)
+        activeTasksRef.current.delete(taskId)
+        options.onComplete?.(result)
+      },
+      onError: (err) => {
+        setIsProcessing(false)
+        setError(err)
+        activeTasksRef.current.delete(taskId)
+        options.onError?.(err)
+      },
+    })
 
-      // Add task to worker pool
-      const taskId = workerPool.addTask({
-        type: TaskType.PARSE_PDF,
-        priority: options?.priority || TaskPriority.NORMAL,
-        data: {
-          fileData: arrayBuffer,
-        },
-        workerType: "document",
-        onProgress: (progress, stage) => {
-          setProgress(progress)
-          if (stage) setStage(stage)
-          options?.onProgress?.(progress, stage)
-        },
-        onComplete: (result) => {
-          setIsProcessing(false)
-          setProgress(100)
-          options?.onComplete?.(result)
-        },
-        onError: (error) => {
-          setIsProcessing(false)
-          setError(error)
-          options?.onError?.(error)
-        },
-        onStatusChange: (status) => {
-          if (status === TaskStatus.RUNNING) {
-            setIsProcessing(true)
-          } else if (
-            status === TaskStatus.COMPLETED ||
-            status === TaskStatus.FAILED ||
-            status === TaskStatus.CANCELLED
-          ) {
-            setIsProcessing(false)
-          }
-          options?.onStatusChange?.(status)
-        },
-        timeoutMs: options?.timeout || 5 * 60 * 1000, // Default 5 minutes
-      })
+    activeTasksRef.current.add(taskId)
+    return taskId
+  }, [])
 
-      // Add task ID to list
-      setTaskIds((prev) => [...prev, taskId])
-    }
+  // Parse a DOCX file
+  const parseDocxFile = useCallback((file: File, options: TaskOptions = {}) => {
+    const workerPool = getWorkerPool()
+    setIsProcessing(true)
+    setProgress(0)
+    setStage("Preparing DOCX file")
+    setError(null)
 
-    reader.onerror = () => {
-      setIsProcessing(false)
-      const error = "Failed to read file"
-      setError(error)
-      options?.onError?.(error)
-    }
+    const taskId = workerPool.addDocumentParserTask({
+      type: "parseDocx",
+      file,
+      priority: options.priority || TaskPriority.HIGH, // Higher priority for DOCX files
+      onProgress: (progress, stage) => {
+        setProgress(progress)
+        if (stage) setStage(stage)
+        options.onProgress?.(progress, stage)
+      },
+      onComplete: (result) => {
+        setIsProcessing(false)
+        setProgress(100)
+        setStage(undefined)
+        activeTasksRef.current.delete(taskId)
+        options.onComplete?.(result)
+      },
+      onError: (err) => {
+        setIsProcessing(false)
+        setError(err)
+        activeTasksRef.current.delete(taskId)
+        options.onError?.(err)
+      },
+    })
 
-    reader.readAsArrayBuffer(file)
+    activeTasksRef.current.add(taskId)
+    return taskId
   }, [])
 
   // Process text
-  const processText = useCallback((text: string, chunkSize = 50000, options?: UseWorkerPoolOptions) => {
+  const processText = useCallback((text: string, chunkSize = 50000, options: TaskOptions = {}) => {
+    const workerPool = getWorkerPool()
     setIsProcessing(true)
     setProgress(0)
-    setStage(undefined)
+    setStage("Processing text")
     setError(null)
 
-    const workerPool = getWorkerPool()
-
-    // Add task to worker pool
-    const taskId = workerPool.addTask({
-      type: TaskType.PROCESS_TEXT,
-      priority: options?.priority || TaskPriority.NORMAL,
-      data: {
-        text,
-        chunkSize,
-      },
-      workerType: "text",
+    const taskId = workerPool.addTextProcessorTask({
+      type: "processText",
+      text,
+      chunkSize,
+      priority: options.priority || TaskPriority.NORMAL,
       onProgress: (progress, stage) => {
         setProgress(progress)
         if (stage) setStage(stage)
-        options?.onProgress?.(progress, stage)
+        options.onProgress?.(progress, stage)
       },
       onComplete: (result) => {
         setIsProcessing(false)
         setProgress(100)
-        options?.onComplete?.(result)
+        setStage(undefined)
+        activeTasksRef.current.delete(taskId)
+        options.onComplete?.(result)
       },
-      onError: (error) => {
+      onError: (err) => {
         setIsProcessing(false)
-        setError(error)
-        options?.onError?.(error)
+        setError(err)
+        activeTasksRef.current.delete(taskId)
+        options.onError?.(err)
       },
-      onStatusChange: (status) => {
-        if (status === TaskStatus.RUNNING) {
-          setIsProcessing(true)
-        } else if (status === TaskStatus.COMPLETED || status === TaskStatus.FAILED || status === TaskStatus.CANCELLED) {
-          setIsProcessing(false)
-        }
-        options?.onStatusChange?.(status)
-      },
-      timeoutMs: options?.timeout || 5 * 60 * 1000, // Default 5 minutes
     })
 
-    // Add task ID to list
-    setTaskIds((prev) => [...prev, taskId])
+    activeTasksRef.current.add(taskId)
+    return taskId
   }, [])
 
   // Enhance text
-  const enhanceText = useCallback((text: string, enhanceOptions = {}, options?: UseWorkerPoolOptions) => {
+  const enhanceText = useCallback((text: string, enhanceOptions: any = {}, options: TaskOptions = {}) => {
+    const workerPool = getWorkerPool()
     setIsProcessing(true)
     setProgress(0)
-    setStage(undefined)
+    setStage("Enhancing text")
     setError(null)
 
-    const workerPool = getWorkerPool()
-
-    // Add task to worker pool
-    const taskId = workerPool.addTask({
-      type: TaskType.ENHANCE_TEXT,
-      priority: options?.priority || TaskPriority.NORMAL,
-      data: {
-        text,
-        options: enhanceOptions,
-      },
-      workerType: "text",
+    const taskId = workerPool.addTextProcessorTask({
+      type: "enhanceText",
+      text,
+      enhanceOptions,
+      priority: options.priority || TaskPriority.NORMAL,
       onProgress: (progress, stage) => {
         setProgress(progress)
         if (stage) setStage(stage)
-        options?.onProgress?.(progress, stage)
+        options.onProgress?.(progress, stage)
       },
       onComplete: (result) => {
         setIsProcessing(false)
         setProgress(100)
-        options?.onComplete?.(result)
+        setStage(undefined)
+        activeTasksRef.current.delete(taskId)
+        options.onComplete?.(result)
       },
-      onError: (error) => {
+      onError: (err) => {
         setIsProcessing(false)
-        setError(error)
-        options?.onError?.(error)
+        setError(err)
+        activeTasksRef.current.delete(taskId)
+        options.onError?.(err)
       },
-      onStatusChange: (status) => {
-        if (status === TaskStatus.RUNNING) {
-          setIsProcessing(true)
-        } else if (status === TaskStatus.COMPLETED || status === TaskStatus.FAILED || status === TaskStatus.CANCELLED) {
-          setIsProcessing(false)
-        }
-        options?.onStatusChange?.(status)
-      },
-      timeoutMs: options?.timeout || 5 * 60 * 1000, // Default 5 minutes
     })
 
-    // Add task ID to list
-    setTaskIds((prev) => [...prev, taskId])
+    activeTasksRef.current.add(taskId)
+    return taskId
   }, [])
 
-  // Cancel all tasks
-  const cancelAllTasks = useCallback(() => {
+  // Cancel a task
+  const cancelTask = useCallback((taskId: string) => {
     const workerPool = getWorkerPool()
-
-    // Cancel all tasks created by this hook
-    taskIds.forEach((taskId) => {
-      workerPool.cancelTask(taskId)
-    })
-
-    // Reset state
+    workerPool.cancelTask(taskId)
+    activeTasksRef.current.delete(taskId)
     setIsProcessing(false)
-    setProgress(0)
-    setStage(undefined)
-    setTaskIds([])
-  }, [taskIds])
+  }, [])
 
   // Get pool status
   const getPoolStatus = useCallback(() => {
     const workerPool = getWorkerPool()
-    return workerPool.getPoolStatus()
+    return workerPool.getStatus()
   }, [])
 
   return {
-    parseTextFile,
-    parsePdfFile,
-    processText,
-    enhanceText,
-    cancelAllTasks,
-    getPoolStatus,
     isProcessing,
     progress,
     stage,
     error,
+    parseTextFile,
+    parsePdfFile,
+    parseDocxFile,
+    processText,
+    enhanceText,
+    cancelTask,
+    getPoolStatus,
   }
 }
-
-export default useWorkerPool

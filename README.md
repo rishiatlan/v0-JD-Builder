@@ -1,269 +1,120 @@
-# JD Builder (Beta)
+# Atlan JD Builder
 
-A powerful tool for creating, enhancing, and analyzing job descriptions using AI-powered language processing.
+## Overview
 
-## 🚀 Overview
+The Atlan JD Builder is a specialized tool designed to create world-class job descriptions that follow Atlan's standards of excellence. It leverages AI to generate, enhance, and refine job descriptions based on key inputs about the role, ensuring they are outcome-focused, clear, and aligned with Atlan's strategic goals.
 
-JD Builder helps talent acquisition teams and hiring managers create high-quality job descriptions through:
+## Key Features
 
-- Dynamic questionnaires that capture key role requirements
-- Document parsing and analysis of existing JDs
-- AI-powered enhancement of job descriptions
-- Memory-optimized processing of large documents
-- Background worker processing for improved performance
+- **Dynamic Questionnaire**: Generate JDs by answering key questions about the role
+- **Document Upload**: Extract and analyze existing JDs from PDF, DOCX, or TXT files
+- **JD Enhancement**: Improve existing JDs with AI-powered language refinement
+- **Department Guardrails**: Ensure JDs align with department-specific ownership areas
+- **Bias Detection**: Identify and correct potentially biased or exclusionary language
+- **Sharpness Scoring**: Quantitative feedback on JD quality and clarity
+- **Refinement Suggestions**: Get specific recommendations to improve each section
+- **Offline Support**: Continue working even when internet connection is unstable
+- **Persistent Storage**: Save work in progress and access it later
+- **Circuit Breaker Pattern**: Gracefully handle API failures with fallbacks
+- **Error Boundaries**: Prevent entire app crashes when components fail
+- **Progressive Loading**: Load and process large documents efficiently
 
-## ✨ Key Features
+## Technical Architecture
 
-- **Dynamic Questionnaire**: Generate JDs by answering targeted questions about the role
-- **Document Upload**: Parse and analyze existing JDs from PDF, DOCX, or TXT files
-- **JD Enhancement**: Improve existing JDs with AI-powered language processing
-- **Memory Optimization**: Handle large documents efficiently without browser crashes
-- **Worker Pool**: Process documents in the background for better UI responsiveness
-- **Offline Support**: Continue working even when internet connectivity is lost
-- **Persistent Storage**: Save work in progress using IndexedDB
-- **Circuit Breaker Pattern**: Gracefully handle API failures and provide fallbacks
-- **Error Boundaries**: Prevent cascading failures in the UI
-- **Progressive Loading**: Improve perceived performance with optimized loading states
+The Atlan JD Builder is built with Next.js and uses a modern tech stack:
 
-## 🧠 LLM Prompt Engineering
+- **Next.js App Router**: For efficient server-side rendering and routing
+- **React**: For building the user interface
+- **TypeScript**: For type safety and better developer experience
+- **Tailwind CSS**: For styling
+- **Web Workers**: For heavy processing tasks off the main thread
+- **Circuit Breaker Pattern**: For resilient API calls
+- **IndexedDB**: For client-side persistent storage
+- **Service Worker**: For offline capabilities
+- **Error Boundaries**: For graceful error handling
 
-JD Builder leverages carefully crafted prompts to generate high-quality job descriptions aligned with Atlan's Standards of Excellence.
+## LLM Prompt Engineering
 
-### Prompt Strategy
+The Atlan JD Builder uses carefully crafted prompts to generate high-quality job descriptions. Our prompt engineering follows these key principles:
 
-Our prompt engineering follows these key principles:
-
-1. **Outcome-Focused**: Prompts emphasize measurable outcomes rather than tasks
-2. **Role Boundary Guardrails**: Department-specific guardrails ensure JDs stay within appropriate boundaries
-3. **Bias Detection**: Specialized prompts identify and eliminate biased language
-4. **Structured Output**: All prompts request structured JSON responses for consistent parsing
-5. **Fallback Mechanisms**: Graceful degradation when AI services are unavailable
+1. **Outcome-Focused**: Prompts emphasize results over tasks
+2. **Clear Role Boundaries**: Using department guardrails to define ownership
+3. **Inclusive Language**: Detecting and correcting bias
+4. **Data-Driven**: Providing quantitative feedback on JD quality
+5. **Continuous Improvement**: Enabling iterative enhancement
 
 ### Core Prompts
 
-| Prompt Type | Purpose | When Used | Key Components |
-|-------------|---------|-----------|----------------|
-| JD Generation | Create comprehensive job descriptions | After form submission | Role details, guardrails, formatting instructions |
-| Refinement Suggestions | Improve specific sections | During refinement phase | Section content, improvement guidelines |
-| Bias Detection | Identify non-inclusive language | After JD generation | Content analysis, bias categories |
-| Document Analysis | Extract information from uploads | After document upload | Content extraction, structured output |
-| JD Enhancement | Improve existing JDs | During enhancement workflow | Content analysis, improvement guidelines |
+| Prompt Name | Purpose | When Used |
+|-------------|---------|-----------|
+| JD Generation | Creates complete job description from questionnaire inputs | When user submits the questionnaire form |
+| Document Analysis | Extracts structured information from uploaded documents | When user uploads a document |
+| JD Enhancement | Improves existing JD language and structure | When user requests JD enhancement |
+| Refinement Suggestions | Provides specific improvement recommendations | When viewing JD sections in refinement mode |
+| Bias Detection | Identifies potentially biased or exclusionary language | During JD generation and enhancement |
 
 ### Example Prompt Structure
 
 \`\`\`
-Create a comprehensive job description for the following role:
+You are an expert job description writer for Atlan.
+Your task is to create a job description for the role of {title} in the {department} department.
 
-Title: ${data.title}
-Department: ${data.department}
+Key information about this role:
+- Outcomes that define success: {outcomes}
+- Mindset of top performers: {mindset}
+- Strategic advantage for Atlan: {advantage}
+- Key decisions/trade-offs: {decisions}
 
-Key Outcomes: ${data.outcomes}
-Measurable Outcomes: ${data.measurableOutcomes || "Not specified"}
-Mindset/Instincts: ${data.mindset}
-Strategic Advantage: ${data.advantage}
-Key Decisions/Trade-offs: ${data.decisions}
+Department guardrails:
+- Areas this role owns: {departmentGuardrails.owns}
+- Areas this role should avoid: {departmentGuardrails.avoid}
 
-${guardrailsPrompt}
+Create a comprehensive job description with the following sections:
+1. Overview
+2. Responsibilities (outcome-focused, not task-focused)
+3. Qualifications (essential skills and experience)
+4. [Optional] Strategic vision (if includeStrategicVision is true)
 
-Format the response as a JSON object with the following structure:
-{
-  "sections": {
-    "overview": "A compelling paragraph that summarizes the role, its impact, and why it matters",
-    "responsibilities": ["Responsibility 1", "Responsibility 2", ...],
-    "qualifications": ["Qualification 1", "Qualification 2", ...]
-  },
-  "analysis": {
-    "clarity": 0-100 score,
-    "inclusivity": 0-100 score,
-    "seo": 0-100 score,
-    "attraction": 0-100 score
-  },
-  "biasFlags": [
-    {"text": "potentially biased text", "reason": "explanation of bias", "suggestion": "alternative text"}
-  ]
-}
-
-IMPORTANT GUIDELINES:
-1. Make the overview compelling and outcome-focused
-2. List 5-7 key responsibilities that align with the department's ownership areas
-3. List 5-7 qualifications that would make someone successful
-4. Ensure language is inclusive and free of bias
-5. Focus on measurable outcomes rather than tasks
-6. Use active voice and strong action verbs
-7. Avoid jargon and buzzwords
-8. Keep the tone professional but conversational
-9. STRICTLY FOLLOW THE ROLE BOUNDARY GUARDRAILS
-
-Your response must be valid JSON that can be parsed with JSON.parse().
+Follow these principles:
+- Use active voice and concrete language
+- Focus on outcomes, not tasks
+- Be specific and measurable where possible
+- Use inclusive language
+- Align with Atlan's values of ownership and excellence
 \`\`\`
 
-### Alignment with Atlan Standards of Excellence
+## Recent Changes
 
-Our prompt engineering aligns with Atlan's Standards of Excellence through:
+- **DOCX Parsing Fix**: Improved DOCX file parsing with better error handling and progress reporting
+- **Offline Support**: Added service worker for offline capabilities
+- **Persistent Storage**: Implemented IndexedDB for client-side storage
+- **Circuit Breaker Pattern**: Added resilient API calls with fallbacks
+- **Error Boundaries**: Implemented graceful error handling
+- **Worker Pool Optimization**: Enhanced worker pool for better performance
 
-1. **Outcome-Focused Language**: Prompts emphasize what success looks like rather than tasks
-2. **Clear Role Boundaries**: Department guardrails ensure clear ownership and avoid overlap
-3. **Inclusive Language**: Bias detection and correction promote diversity and inclusion
-4. **Data-Driven Approach**: Analysis scores provide quantitative feedback on JD quality
-5. **Continuous Improvement**: Refinement suggestions enable iterative enhancement
+## Getting Started
 
-## 🛠️ Technical Architecture
+1. Clone the repository
+2. Install dependencies: `npm install`
+3. Run the development server: `npm run dev`
+4. Open [http://localhost:3000](http://localhost:3000) in your browser
 
-### Core Components
+## Environment Variables
 
-- **JD Builder Form**: Main interface for creating and enhancing JDs
-- **Document Parser**: Processes uploaded documents with memory optimization
-- **Language Processor**: AI-powered text analysis and enhancement
-- **Worker Pool**: Background processing for CPU-intensive tasks
-- **Memory Optimization**: Utilities for handling large documents efficiently
-- **Circuit Breaker**: Pattern for handling API failures gracefully
-- **IndexedDB Storage**: Persistent storage for work in progress
-- **Service Worker**: Offline capabilities and asset caching
-- **Error Boundaries**: Prevent cascading failures in the UI
+Create a `.env.local` file with the following variables:
 
-### Technology Stack
-
-- Next.js (App Router)
-- React with TypeScript
-- Tailwind CSS for styling
-- Web Workers for background processing
-- IndexedDB for persistent storage
-- Service Workers for offline capabilities
-- AI integration for language processing
-
-## 🔧 Development Setup
-
-### Prerequisites
-
-- Node.js 16+ and npm/yarn
-- Git
-
-### Installation
-
-1. Clone the repository:
-  \`\`\`bash
-  git clone https://github.com/your-org/jd-builder.git
-  cd jd-builder
-  \`\`\`
-
-2. Install dependencies:
-  \`\`\`bash
-  npm install
-  # or
-  yarn install
-  \`\`\`
-
-3. Set up environment variables:
-  \`\`\`bash
-  cp .env.example .env.local
-  \`\`\`
-  Then edit `.env.local` with your API keys and configuration.
-
-4. Run the development server:
-  \`\`\`bash
-  npm run dev
-  # or
-  yarn dev
-  \`\`\`
-
-5. Open [http://localhost:3000](http://localhost:3000) in your browser.
-
-## 🧪 Quality Assurance
-
-### Code Quality Tools
-
-- **ESLint**: Static code analysis with TypeScript-specific rules
-- **Prettier**: Code formatting
-- **TypeScript**: Static type checking
-- **Husky**: Pre-commit hooks for code quality checks
-
-### Running Quality Checks
-
-\`\`\`bash
-# Lint code
-npm run lint
-# or
-yarn lint
-
-# Fix linting issues automatically
-npm run lint:fix
-# or
-yarn lint:fix
-
-# Type check
-npm run type-check
-# or
-yarn type-check
+\`\`\`
+NEXT_PUBLIC_APP_URL=http://localhost:3000
+API_KEY=your_api_key_here
 \`\`\`
 
-## 📚 Documentation
+## Contributing
 
-### Component Documentation
+1. Create a feature branch: `git checkout -b feature/your-feature-name`
+2. Make your changes
+3. Run tests: `npm test`
+4. Submit a pull request
 
-- **JD Builder Form**: Main form component with tabs for questionnaire, upload, and enhance
-- **Document Parser**: Handles document parsing with memory optimization
-- **Progressive Document Preview**: Renders large documents efficiently
-- **Error Boundary**: Prevents cascading failures in the UI
-- **Network Status Monitor**: Tracks online/offline status
-- **Service Worker Registration**: Manages service worker lifecycle
+## License
 
-### Utility Documentation
-
-- **Memory Optimization**: Utilities for handling large documents
-- **Worker Pool**: Background processing for CPU-intensive tasks
-- **Language Processor**: AI-powered text analysis
-- **Circuit Breaker**: Pattern for handling API failures
-- **IndexedDB Storage**: Persistent storage service
-
-## 🔍 Troubleshooting
-
-### Common Issues
-
-- **Memory Issues**: If you encounter memory issues with large documents, try:
- - Breaking the document into smaller chunks
- - Using a different browser (Chrome tends to handle memory better)
- - Closing other browser tabs to free up memory
-
-- **Worker Pool Issues**: If background processing isn't working:
- - Check if your browser supports Web Workers
- - Ensure you're not in a private/incognito window (some browsers limit Web Worker functionality)
-
-- **Offline Mode Issues**: If offline mode isn't working:
- - Ensure you've visited the site at least once while online
- - Check if your browser supports Service Workers
- - Clear site data and reload if service worker is stuck
-
-- **Deployment Errors**: For syntax errors during deployment:
- - Run `npm run lint` and `npm run type-check` to catch issues before deployment
- - Check for unbalanced tags or syntax errors in TypeScript files
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create your feature branch: `git checkout -b feature/amazing-feature`
-3. Commit your changes: `git commit -m 'Add some amazing feature'`
-4. Push to the branch: `git push origin feature/amazing-feature`
-5. Open a Pull Request
-
-## 📄 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-## 📝 Recent Changes
-
-### Application Optimization (2023-06-15)
-- Implemented circuit breaker pattern for API resilience
-- Added IndexedDB storage for persistent data
-- Optimized worker pool for better performance
-- Added error boundaries to prevent cascading failures
-- Implemented service worker for offline capabilities
-- Added network status monitoring
-- Enhanced document analysis with progress indicators
-- Improved error recovery mechanisms
-- Added document preview capabilities
-- Added AI confidence indicators
-
-### Dependency Cleanup (2023-05-06)
-- Removed Supabase dependencies as they were not being used in the application
-- Cleaned up related environment variables
-- Simplified the project dependencies
+This project is proprietary and confidential. Unauthorized copying, distribution, or use is strictly prohibited.

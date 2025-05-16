@@ -98,6 +98,27 @@ async function parsePdf(fileData: ArrayBuffer): Promise<string> {
   }
 }
 
+// Parse DOCX file
+async function parseDocx(fileData: ArrayBuffer): Promise<string> {
+  try {
+    // We can't directly use mammoth in a web worker due to its dependencies
+    // Instead, we'll send the file data back to the main thread for processing
+    self.postMessage(
+      {
+        type: "docxData",
+        fileData: fileData,
+      },
+      [fileData],
+    )
+
+    // Return empty string as the actual parsing will happen on the main thread
+    return ""
+  } catch (error) {
+    self.postMessage({ type: "error", error: "Failed to process DOCX file in worker" })
+    return ""
+  }
+}
+
 // Parse text file
 async function parseText(
   fileData: ArrayBuffer,
@@ -150,6 +171,18 @@ self.onmessage = async (event: MessageEvent<WorkerMessage>) => {
       } catch (error) {
         if (!isCancelled) {
           self.postMessage({ type: "error", error: "Failed to parse PDF" })
+        }
+      }
+      break
+
+    case "parseDocx":
+      try {
+        // For DOCX files, we'll handle differently
+        await parseDocx(message.fileData)
+        // The actual result will be sent back after main thread processing
+      } catch (error) {
+        if (!isCancelled) {
+          self.postMessage({ type: "error", error: "Failed to process DOCX file" })
         }
       }
       break
